@@ -1,3 +1,4 @@
+#include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
 #include <netinet/in.h>
@@ -12,23 +13,23 @@
 
 #include "common.h"
 
+#define BASE_PATH_LEN 100
 
 const char *BASE_DIR_FROM_HOME = "/ftp";
+int sockfd, newsockfd, portno;
+struct sockaddr_in serv_addr, cli_addr;
+socklen_t clilen;
+char buffer[BUFFER_SIZE];
 
 /* File system auxiliar functions */
 // Base directories
-void get_base_dir(char *base_path);
+void get_base_dir(char *base_path, int len);
 
 int main() {
     // Determine base directory for all users
-    char base_path[100];
-    get_base_dir(base_path);
+    char base_path[BASE_PATH_LEN];
+    get_base_dir(base_path, BASE_PATH_LEN);
     log_info(NULL, "Base directory at: %s", base_path);
-
-    // Sockets initialization
-    int sockfd, newsockfd, portno;
-    struct sockaddr_in serv_addr, cli_addr;
-    socklen_t clilen;
 
     // Open socket with AF_INET family and TCP protocol
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -42,16 +43,15 @@ int main() {
     serv_addr.sin_port = htons(portno);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
-        raise_error(NULL, "Couldn't bind socket to address %d:%d", serv_addr.sin_addr.s_addr, serv_addr.sin_port);
+        raise_error(NULL, "Couldn't bind socket to address %s:%d", inet_ntoa(serv_addr.sin_addr), portno);
     else
-        log_info(NULL, "Server listening at %d:%d", serv_addr.sin_addr.s_addr, portno);
+        log_info(NULL, "Server listening at %s:%d", inet_ntoa(serv_addr.sin_addr), portno);
 
     // Listen for connections with backlog queue size set to 5
     listen(sockfd,5);
 
     // Handle SIGCHILD to prevent zombie child processes
     signal(SIGCHLD, SIG_IGN);
-
 
     // Main loop for base server process
     while (1) {
@@ -62,7 +62,7 @@ int main() {
         if (newsockfd < 0)
             raise_error(NULL, "Couldn't accept new connection");
         if (fork() == 0) {
-            log_info(NULL, "Accepted connection from: %d:%d", cli_addr.sin_addr.s_addr, cli_addr.sin_port);
+            log_info(NULL, "Accepted connection from: %s:%d", inet_ntoa(cli_addr.sin_addr), cli_addr.sin_port);
             break;
         }
         else
@@ -70,27 +70,29 @@ int main() {
     }
 
     // Read messages from client at child process
-    char buffer[100000]; //Maximum of 100MB per message
     int n;
-    bzero(buffer, 100001);
-    n = read(newsockfd,buffer,100000);
+    bzero(buffer, BUFFER_SIZE+1);
+    n = read(newsockfd,buffer,BUFFER_SIZE);
     if (n < 0)
         raise_error(NULL, "Error reading from socket");
-    log_info("Message received: %s", buffer);
+    log_info(NULL, "Message received: %s", buffer);
     sprintf(buffer, "message received");
-    n = write(newsockfd,buffer,100000);
+    n = write(newsockfd,buffer,BUFFER_SIZE);
     if (n < 0)
-        raise_error(NULL, "Error reading from socket");
+        raise_error(NULL, "Error writing to socket");
+    else
+        log_info(NULL, "Sent message: %s", buffer);
 
     return 0;
 }
 
 
-void get_base_dir(char *base_path) {
+void get_base_dir(char *base_path, int len) {
     struct passwd* pw = getpwuid(getuid());
     const char *home_dir = pw->pw_dir;
-    strcpy(base_path, home_dir);
-    strcat(base_path, BASE_DIR_FROM_HOME);
+    strncpy(base_path, home_dir, len);
+    strncat(base_path, BASE_DIR_FROM_HOME, len);
+    base_path[len] = '\0';
     DIR *base_dir = opendir(base_path);
     if (base_dir) {
         closedir(base_dir);

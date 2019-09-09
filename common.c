@@ -53,7 +53,7 @@ void log_warning(char *client, char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
-        printf("WARNING");
+        printf("(WARNING)");
         if (client) {
             printf("[%s]", client);
         }
@@ -70,7 +70,7 @@ void log_info(char *client, char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
-        printf("INFO");
+        printf("(INFO)");
         if (client) {
             printf("[%s]", client);
         }
@@ -87,7 +87,7 @@ void log_debug(char *client, char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
-        printf("DEBUG");
+        printf("(DEBUG)");
         if (client) {
             printf("[%s]", client);
         }
