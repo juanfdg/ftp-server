@@ -11,8 +11,11 @@ void error(char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
-        fprintf(stderr, "%s: ", strerror(errno));
+        if (errno) {
+            fprintf(stderr, "%s: ", strerror(errno));
+        }
         vfprintf(stderr, fmt, args);
+        fprintf(stderr, "\n");
     } else {
         perror("");
     }
