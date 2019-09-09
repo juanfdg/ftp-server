@@ -1,26 +1,13 @@
 #ifndef FTPSERVER_COMMON_H
 #define FTPSERVER_COMMON_H
 
-#include <errno.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+/* Logging */
+void raise_error(char *client, char *fmt, ...);
+void log_error(char *client, char *fmt, ...);
+void log_warning(char *client, char *fmt, ...);
+void log_info(char *client, char *fmt, ...);
+void log_debug(char *client, char *fmt, ...);
 
-void error(char *fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    if(fmt) {
-        if (errno) {
-            fprintf(stderr, "%s: ", strerror(errno));
-        }
-        vfprintf(stderr, fmt, args);
-        fprintf(stderr, "\n");
-    } else {
-        perror("");
-    }
-    va_end(args);
-    exit(1);
-}
+
 
 #endif //FTPSERVER_COMMON_H

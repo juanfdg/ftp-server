@@ -23,7 +23,7 @@ int main() {
     // Determine base directory for all users
     char base_path[100];
     get_base_dir(base_path);
-    printf("Base directory at: %s\n", base_path);
+    log_info(NULL, "Base directory at: %s", base_path);
 
     // Sockets initialization
     int sockfd, newsockfd, portno;
@@ -33,7 +33,7 @@ int main() {
     // Open socket with AF_INET family and TCP protocol
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
-        error("ERROR opening socket");
+        raise_error(NULL, "Couldn't open socket");
 
     // Bind socket to internet server address
     bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -42,9 +42,9 @@ int main() {
     serv_addr.sin_port = htons(portno);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
-        error("ERROR on binding socket to address %d:%d", serv_addr.sin_addr.s_addr, serv_addr.sin_port);
+        raise_error(NULL, "Couldn't bind socket to address %d:%d", serv_addr.sin_addr.s_addr, serv_addr.sin_port);
     else
-        printf("Server listening at %d:%d\n", serv_addr.sin_addr.s_addr, portno);
+        log_info(NULL, "Server listening at %d:%d", serv_addr.sin_addr.s_addr, portno);
 
     // Listen for connections with backlog queue size set to 5
     listen(sockfd,5);
@@ -52,14 +52,19 @@ int main() {
     // Handle SIGCHILD to prevent zombie child processes
     signal(SIGCHLD, SIG_IGN);
 
-    // Block until receive a connection request to accept
+
+    // Main loop for base server process
     while (1) {
+        // Block until receive a connection request to accept
         clilen = sizeof(cli_addr);
+        bzero((char *) &cli_addr, clilen);
         newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
         if (newsockfd < 0)
-            error("ERROR on accept new connection");
-        if (fork() == 0)
+            raise_error(NULL, "Couldn't accept new connection");
+        if (fork() == 0) {
+            log_info(NULL, "Accepted connection from: %d:%d", cli_addr.sin_addr.s_addr, cli_addr.sin_port);
             break;
+        }
         else
             close(newsockfd);
     }
@@ -70,12 +75,12 @@ int main() {
     bzero(buffer, 100001);
     n = read(newsockfd,buffer,100000);
     if (n < 0)
-        error("ERROR reading from socket");
-    printf("Message received: %s",buffer);
+        raise_error(NULL, "Error reading from socket");
+    log_info("Message received: %s", buffer);
     sprintf(buffer, "message received");
     n = write(newsockfd,buffer,100000);
     if (n < 0)
-        error("ERROR writing to socket");
+        raise_error(NULL, "Error reading from socket");
 
     return 0;
 }
