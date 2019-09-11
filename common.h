@@ -1,15 +1,7 @@
 #ifndef FTPSERVER_COMMON_H
 #define FTPSERVER_COMMON_H
 
-#define BUFFER_SIZE 100000
-
-/* Logging */
-void raise_error(char *client, char *fmt, ...);
-void log_error(char *client, char *fmt, ...);
-void log_warning(char *client, char *fmt, ...);
-void log_info(char *client, char *fmt, ...);
-void log_debug(char *client, char *fmt, ...);
-
+#define BUFFER_SIZE 10000
 
 /* Protocol */
 enum MessageType {
@@ -52,9 +44,23 @@ enum MessageType {
 };
 
 struct message {
-    size_t size;
-    __uint8_t type;
-    char *payload;
+    u_int8_t type;
+    int session_id;
+    int len;
+    char payload[BUFFER_SIZE];
 };
+typedef struct message message;
+
+int send_message(int sockfd, u_int8_t type, int session_id, std::string payload);
+int read_message(int sockfd, message *msg);
+void broken_protocol(int sockfd);
+
+
+/* Logging */
+void raise_error(const char *client, const char *fmt, ...);
+void log_error(const char *client, const char *fmt, ...);
+void log_warning(const char *client, const char *fmt, ...);
+void log_info(const char *client, const char *fmt, ...);
+void log_debug(const char *client, const char *fmt, ...);
 
 #endif //FTPSERVER_COMMON_H

@@ -8,28 +8,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <vector>
+
+#include <iostream>
 
 #include "common.h"
 
 #define BASE_PATH_LEN 100
 
-const char *BASE_DIR_FROM_HOME = "/ftp";
+const std::string BASE_DIR_FROM_HOME("/ftp");
 int sockfd, newsockfd, portno;
 struct sockaddr_in serv_addr, cli_addr;
 socklen_t clilen;
-char buffer[BUFFER_SIZE];
 
 /* File system auxiliar functions */
 // Base directories
-void get_base_dir(char *base_path, int len);
+std::string get_base_dir();
 
 int main() {
     // Determine base directory for all users
-    char base_path[BASE_PATH_LEN];
-    get_base_dir(base_path, BASE_PATH_LEN);
-    log_info(NULL, "Base directory at: %s", base_path);
+    std::string base_path = get_base_dir();
+    log_info(NULL, "Base directory at: %s", base_path.c_str());
 
     // Open socket with AF_INET family and TCP protocol
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -63,37 +65,51 @@ int main() {
             raise_error(NULL, "Couldn't accept new connection");
         if (fork() == 0) {
             log_info(NULL, "Accepted connection from: %s:%d", inet_ntoa(cli_addr.sin_addr), cli_addr.sin_port);
+            close(sockfd);
+            sockfd = newsockfd;
             break;
         }
         else
             close(newsockfd);
     }
 
-    // Read messages from client at child process
+    // Read opening message from client at child process
     int n;
-    bzero(buffer, BUFFER_SIZE+1);
-    n = read(newsockfd,buffer,BUFFER_SIZE);
+    message msg;
+    n = read_message(sockfd, &msg);
     if (n < 0)
         raise_error(NULL, "Error reading from socket");
-    log_info(NULL, "Message received: %s", buffer);
-    sprintf(buffer, "message received");
-    n = write(newsockfd,buffer,BUFFER_SIZE);
-    if (n < 0)
-        raise_error(NULL, "Error writing to socket");
-    else
-        log_info(NULL, "Sent message: %s", buffer);
+    if (msg.type == OPEN_REQUEST) {
+        // Parse user and password
+        std::string pld, user, passwd;
+        pld = msg.payload;
+        int pos = pld.find('\n');
+        user = pld.substr(0, pos);
+        passwd = pld.substr(pos+1);
+        if (user == "simba" && passwd == "123") {
+            int session_id = 123;
+            send_message(sockfd, OPEN_ACCEPT, session_id, "");
+            log_info("123", "Opened new session: %d", session_id);
+        } else {
+            pld = "Username or password incorrect";
+            log_error(NULL, "%s", pld.c_str());
+            send_message(sockfd, OPEN_REFUSE, 0, pld);
+            close(sockfd);
+        }
+    } else {
+        broken_protocol(sockfd);
+        exit(1);
+    }
 
     return 0;
 }
 
 
-void get_base_dir(char *base_path, int len) {
+std::string get_base_dir() {
+    std::string base_path;
     struct passwd* pw = getpwuid(getuid());
-    const char *home_dir = pw->pw_dir;
-    strncpy(base_path, home_dir, len);
-    strncat(base_path, BASE_DIR_FROM_HOME, len);
-    base_path[len] = '\0';
-    DIR *base_dir = opendir(base_path);
+    base_path =  std::string(pw->pw_dir) + base_path;
+    DIR *base_dir = opendir(base_path.c_str());
     if (base_dir) {
         closedir(base_dir);
     } else if (errno == ENOENT) {
@@ -101,8 +117,10 @@ void get_base_dir(char *base_path, int len) {
         if (pid > 0) {
             waitpid(pid, NULL, 0);
         } else {
-            char *args[] = {"mkdir", "-p", base_path, NULL};
+            char * args[] = {"mkdir", "-p", NULL, NULL};
+            args[2] = (char*)base_path.c_str();
             execv("/bin/mkdir", args);
         }
     }
+    return base_path;
 }

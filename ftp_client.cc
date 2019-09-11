@@ -7,6 +7,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
+#include <iostream>
+#include <fstream>
+#include <string>
+
 #include "common.h"
 
 #define COMMAND_LEN 100
@@ -20,8 +24,8 @@ char buffer[BUFFER_SIZE];
 int get_input();
 
 // Connection management
-void open_section(char *hostname);
-void close_section();
+void open_session(char *hostname);
+void close_session();
 
 int main(int argc, char *argv[]) {
     while(get_input());
@@ -55,10 +59,11 @@ int get_input() {
             log_error(NULL, "Usage: open <server>");
             return -1;
         }
-
-        open_section(arg);
+        open_session(arg);
+        return 1;
     } else if(strcmp(command, "close") == 0) {
-        close_section();
+        close_session();
+        return 1;
     } else if(strcmp(command, "quit") == 0) {
         return 0;
     } else {
@@ -67,7 +72,8 @@ int get_input() {
     }
 }
 
-void open_section(char *hostname) {
+
+void open_session(char *hostname) {
     // Resolving server address
     server = gethostbyname(hostname);
     if (server == NULL) {
@@ -88,31 +94,48 @@ void open_section(char *hostname) {
     serv_addr.sin_port = htons(portno);
 
     // Connect to server
-    if (connect(sockfd, &serv_addr, sizeof(serv_addr)) < 0) {
+    if (connect(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
         log_error(NULL, "Couldn't connect to %s:%d", hostname, portno);
         return;
     } else {
         log_info(NULL, "Connected to %s:%d", hostname, portno);
     }
 
-    // Send and receive messages
+
+    // Request user and password
+    std::string user, password, payload;
+    printf("username: ");
+    std::getline(std::cin, user);
+    printf("password: ");
+    std::getline(std::cin, password);
+    payload = user + "\n" + password;
+    // Send open session request
     int n;
-    fgets(buffer,BUFFER_SIZE-1,stdin);
-    n = write(sockfd, buffer, strlen(buffer));
+    n = send_message(sockfd, OPEN_REQUEST, 0, payload);
     if (n < 0) {
         log_error(NULL, "Error writing to socket");
         return;
     }
-    bzero(buffer,BUFFER_SIZE);
-    n = read(sockfd, buffer, strlen(buffer));
+
+    // Receive response from server
+    message msg;
+    n = read_message(sockfd, &msg);
     if (n < 0) {
         log_error(NULL, "Error reading from socket");
         return;
     }
-    log_info(NULL, "Reply received: %s\n", buffer);
+    if (msg.type == OPEN_REFUSE) {
+        log_error(NULL, "Connection refused: %s", msg.payload);
+        close(sockfd);
+    } else if (msg.type == OPEN_ACCEPT) {
+        log_error(NULL, "Connection accepted. Session ID: %d", msg.session_id);
+    } else {
+        broken_protocol(sockfd);
+    }
 }
 
 
-void close_section(){
+void close_session(){
     close(sockfd);
 }
+
