@@ -7,4 +7,5 @@ ftp-server
 
 # Clion
 cmake-build-debug
+.idea/
 
