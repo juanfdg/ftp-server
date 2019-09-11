@@ -17,8 +17,6 @@
 
 #include "common.h"
 
-#define BASE_PATH_LEN 100
-
 const std::string BASE_DIR_FROM_HOME("/ftp");
 int sockfd, newsockfd, portno;
 struct sockaddr_in serv_addr, cli_addr;
@@ -27,6 +25,10 @@ socklen_t clilen;
 /* File system auxiliar functions */
 // Base directories
 std::string get_base_dir();
+
+/* Connection management */
+void open(const char *payload);
+
 
 int main() {
     // Determine base directory for all users
@@ -73,32 +75,23 @@ int main() {
             close(newsockfd);
     }
 
-    // Read opening message from client at child process
-    int n;
-    message msg;
-    n = read_message(sockfd, &msg);
-    if (n < 0)
-        raise_error(NULL, "Error reading from socket");
-    if (msg.type == OPEN_REQUEST) {
-        // Parse user and password
-        std::string pld, user, passwd;
-        pld = msg.payload;
-        int pos = pld.find('\n');
-        user = pld.substr(0, pos);
-        passwd = pld.substr(pos+1);
-        if (user == "simba" && passwd == "123") {
-            int session_id = 123;
-            send_message(sockfd, OPEN_ACCEPT, session_id, "");
-            log_info("123", "Opened new session: %d", session_id);
-        } else {
-            pld = "Username or password incorrect";
-            log_error(NULL, "%s", pld.c_str());
-            send_message(sockfd, OPEN_REFUSE, 0, pld);
+    // Read client messages loop
+    while (1) {
+        int n;
+        message msg;
+        n = read_message(sockfd, &msg);
+        if (n < 0)
+            raise_error(NULL, "Error reading from socket");
+        if (msg.type == OPEN_REQUEST) {
+            open(msg.payload);
+        } else if (msg.type == CLOSE) {
+            log_info(NULL, "Session %d closed", 123);
             close(sockfd);
+            break;
+        } else {
+            broken_protocol(sockfd);
+            exit(1);
         }
-    } else {
-        broken_protocol(sockfd);
-        exit(1);
     }
 
     return 0;
@@ -108,7 +101,7 @@ int main() {
 std::string get_base_dir() {
     std::string base_path;
     struct passwd* pw = getpwuid(getuid());
-    base_path =  std::string(pw->pw_dir) + base_path;
+    base_path =  std::string(pw->pw_dir) + BASE_DIR_FROM_HOME;
     DIR *base_dir = opendir(base_path.c_str());
     if (base_dir) {
         closedir(base_dir);
@@ -123,4 +116,26 @@ std::string get_base_dir() {
         }
     }
     return base_path;
+}
+
+
+void open(const char *payload) {
+    // Parse user and password
+    std::string pld, user, passwd;
+    pld = payload;
+    int pos = pld.find('\n');
+    user = pld.substr(0, pos);
+    passwd = pld.substr(pos+1);
+
+    // Authentication
+    if (user == "simba" && passwd == "123") {
+        int session_id = 123;
+        send_message(sockfd, OPEN_ACCEPT, session_id, "");
+        log_info("123", "Opened new session: %d", session_id);
+    } else {
+        char pld[] = "Username or password incorrect";
+        log_error(NULL, "%s", pld);
+        send_message(sockfd, OPEN_REFUSE, 0, pld);
+        close(sockfd);
+    }
 }
