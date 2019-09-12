@@ -13,67 +13,55 @@
 
 #include "common.h"
 
-#define COMMAND_LEN 100
+#define SUCCESS 1
+#define FAIL -1
+#define QUIT 0
 
 int sockfd, portno;
 struct sockaddr_in serv_addr;
 struct hostent *server;
-char buffer[BUFFER_SIZE];
 
 // Get user input
 int get_input();
 
 // Connection management
-void open_session(char *hostname);
+void open_session(const char *hostname);
 void close_session();
 
 int main(int argc, char *argv[]) {
-    while(get_input());
+    while(get_input() != QUIT);
     return 0;
 }
 
 
 int get_input() {
-    char command[COMMAND_LEN];
-    char *arg = NULL;
-    fgets(command,COMMAND_LEN-1,stdin);
-    int i;
+    std::string input, command, arg;
+    std::getline(std::cin, input);
     // Separate command from argument
-    for (i = 0; command[i]!='\0'; i++) {
-        if(command[i+1] == ' ') {
-            command[i+1] = '\0';
-            if(i+1 < COMMAND_LEN) {
-                arg = &command[i+2];
-            }
-        } else if (command[i+1] == '\n' || command[i+1] == EOF){
-            command[i+1] = '\0';
-        }
-    }
-    // Format arg string to end at first space
-    if (arg != NULL) {
-        sscanf(arg, "%s", arg);
-    }
+    int pos = input.find(' ');
+    command = input.substr(0, pos);
+    arg = input.substr(pos+1);
 
-    if(strcmp(command, "open") == 0) {
-        if (arg == NULL) {
+    if(command == "open") {
+        if (arg.empty()) {
             log_error(NULL, "Usage: open <server>");
-            return -1;
+            return FAIL;
         }
-        open_session(arg);
-        return 1;
-    } else if(strcmp(command, "close") == 0) {
+        open_session(arg.c_str());
+        return SUCCESS;
+    } else if(command == "close") {
         close_session();
-        return 1;
-    } else if(strcmp(command, "quit") == 0) {
-        return 0;
+        return SUCCESS;
+    } else if(command == "quit") {
+        return QUIT;
     } else {
-        log_error(NULL, "Command %s not recognized", command);
-        return -1;
+        log_error(NULL, "Command %s not recognized", command.c_str());
+        return FAIL;
     }
 }
 
 
-void open_session(char *hostname) {
+void open_session(const char *hostname) {
     // Resolving server address
     server = gethostbyname(hostname);
     if (server == NULL) {
@@ -136,6 +124,12 @@ void open_session(char *hostname) {
 
 
 void close_session(){
+    int n;
+    n = send_message(sockfd, CLOSE, 0, NULL);
+    if (n < 0) {
+        log_error(NULL, "Error writing to socket");
+        return;
+    }
     close(sockfd);
 }
 
