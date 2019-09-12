@@ -125,11 +125,12 @@ void open_session(const char *hostname) {
 
 void close_session(){
     int n;
-    n = send_message(sockfd, CLOSE, 0, NULL);
+    n = send_message(sockfd, CLOSE, 0, "");
     if (n < 0) {
         log_error(NULL, "Error writing to socket");
         return;
     }
+    log_info("123", "Session closed");
     close(sockfd);
 }
 
