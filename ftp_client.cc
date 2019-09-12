@@ -116,7 +116,7 @@ void open_session(const char *hostname) {
         log_error(NULL, "Connection refused: %s", msg.payload);
         close(sockfd);
     } else if (msg.type == OPEN_ACCEPT) {
-        log_error(NULL, "Connection accepted. Session ID: %d", msg.session_id);
+        log_info(NULL, "Connection accepted. Session ID: %d", msg.session_id);
     } else {
         broken_protocol(sockfd);
     }
