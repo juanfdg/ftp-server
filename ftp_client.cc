@@ -77,6 +77,7 @@ int get_input() {
     } else if (command == "ls") {
         if (arg.empty()) {
             list_files(".");
+            return FAIL;
         } else {
             list_files(arg);
         }
@@ -86,30 +87,35 @@ int get_input() {
     } else if (command == "mkdir") {
         if (arg.empty()) {
             log_error(0, "Usage: mkdir <dirname>");
+            return FAIL;
         }
         make_dir(arg);
         return SUCCESS;
     } else if (command == "rmdir") {
         if (arg.empty()) {
             log_error(0, "Usage: rmdir <dirname>");
+            return FAIL;
         }
         remove_dir(arg);
         return SUCCESS;
     } else if (command == "get") {
         if (arg.empty()) {
             log_error(0, "Usage: get <dirname>");
+            return FAIL;
         }
         remove_dir(arg);
         return SUCCESS;
     } else if (command == "put") {
         if (arg.empty()) {
             log_error(0, "Usage: put <dirname>");
+            return FAIL;
         }
         remove_dir(arg);
         return SUCCESS;
     } else if (command == "delete") {
         if (arg.empty()) {
             log_error(0, "Usage: delete <dirname>");
+            return FAIL;
         }
         remove_dir(arg);
         return SUCCESS;
