@@ -116,17 +116,21 @@ int send_message(int sockfd, u_int8_t type, int session_id, std::string payload)
     msg.session_id = session_id;
     msg.len = payload.length();
     strncpy(msg.payload, payload.c_str(), payload.length());
+
     int s_type = sizeof(msg.type),
         s_session_id = sizeof(msg.session_id),
         s_len = sizeof(msg.len),
-        s_payload = sizeof(msg.payload);
-    char *buf = (char*)malloc(s_type+s_session_id+s_len+s_payload);
-    bzero(buf, sizeof(buff));
+        s_payload = msg.len;
+    int s_buf = s_type+s_session_id+s_len+s_payload;
+
+    char *buf = (char*)malloc(s_buf);
+    bzero(buf, s_buf);
     memcpy(buf, &msg.type, s_type);
     memcpy(buf+s_type, &msg.session_id, s_session_id);
     memcpy(buf+s_type+s_session_id, &msg.len, s_len);
     memcpy(buf+s_type+s_session_id+s_len, &msg.payload, s_payload);
-    int n = write(sockfd, buf, sizeof(*buf));
+
+    int n = write(sockfd, buf, s_buf);
     if (n < 0) {
         log_error(session_id, "Error writing to socket");
     }
@@ -145,19 +149,22 @@ int send_binary(int sockfd, u_int8_t type, int session_id, int len, const char *
     msg.type = type;
     msg.session_id = session_id;
     msg.len = len;
-    bzero(msg.payload, BUFFER_SIZE);
     memcpy(msg.payload, buf, len);
+
     int s_type = sizeof(msg.type),
         s_session_id = sizeof(msg.session_id),
         s_len = sizeof(msg.len),
-        s_payload = sizeof(msg.payload);
-    char *msg_buf = (char*)malloc(s_type+s_session_id+s_len+s_payload);
-    bzero(msg_buf, sizeof(buf));
+        s_payload = len;
+    int s_buf = s_type+s_session_id+s_len+s_payload;
+
+    char *msg_buf = (char*)malloc(s_buf);
+    bzero(msg_buf, s_buf);
     memcpy(msg_buf, &msg.type, s_type);
     memcpy(msg_buf+s_type, &msg.session_id, s_session_id);
     memcpy(msg_buf+s_type+s_session_id, &msg.len, s_len);
     memcpy(msg_buf+s_type+s_session_id+s_len, &msg.payload, s_payload);
-    int n = write(sockfd, buf, sizeof(message));
+
+    int n = write(sockfd, msg_buf, s_buf);
     printf("message:%d\n%s\n", msg_buf[0], msg_buf);
     if (n < 0) {
         log_error(session_id, "Error writing to socket");
@@ -171,12 +178,14 @@ int read_message(int sockfd, int session_id, message *msg) {
     bzero(msg, sizeof(message));
     char *buf = (char*)malloc(sizeof(message));
     bzero(buf, BUFFER_SIZE);
+
     int n = read(sockfd, buf, sizeof(message));
     if (n < 0) {
         log_error(session_id, "Error reading from socket");
         free(buf);
         return n;
     }
+
     int s_type = sizeof(msg->type),
         s_session_id = sizeof(msg->session_id),
         s_len = sizeof(msg->len),
