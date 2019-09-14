@@ -121,16 +121,48 @@ int send_message(int sockfd, u_int8_t type, int session_id, std::string payload)
         s_len = sizeof(msg.len),
         s_payload = sizeof(msg.payload);
     char *buf = (char*)malloc(s_type+s_session_id+s_len+s_payload);
-    bzero(buf, BUFFER_SIZE);
+    bzero(buf, sizeof(buff));
     memcpy(buf, &msg.type, s_type);
     memcpy(buf+s_type, &msg.session_id, s_session_id);
     memcpy(buf+s_type+s_session_id, &msg.len, s_len);
     memcpy(buf+s_type+s_session_id+s_len, &msg.payload, s_payload);
-    int n = write(sockfd, buf, sizeof(message));
+    int n = write(sockfd, buf, sizeof(*buf));
     if (n < 0) {
         log_error(session_id, "Error writing to socket");
     }
     free(buf);
+    return n;
+}
+
+
+int send_binary(int sockfd, u_int8_t type, int session_id, int len, const char *buf) {
+    if (len > BUFFER_SIZE) {
+        log_error(session_id, "Payload size bigger than buffer limit of %d bytes", BUFFER_SIZE);
+        return -1;
+    }
+    message msg;
+    bzero(&msg, sizeof(message));
+    msg.type = type;
+    msg.session_id = session_id;
+    msg.len = len;
+    bzero(msg.payload, BUFFER_SIZE);
+    memcpy(msg.payload, buf, len);
+    int s_type = sizeof(msg.type),
+        s_session_id = sizeof(msg.session_id),
+        s_len = sizeof(msg.len),
+        s_payload = sizeof(msg.payload);
+    char *msg_buf = (char*)malloc(s_type+s_session_id+s_len+s_payload);
+    bzero(msg_buf, sizeof(buf));
+    memcpy(msg_buf, &msg.type, s_type);
+    memcpy(msg_buf+s_type, &msg.session_id, s_session_id);
+    memcpy(msg_buf+s_type+s_session_id, &msg.len, s_len);
+    memcpy(msg_buf+s_type+s_session_id+s_len, &msg.payload, s_payload);
+    int n = write(sockfd, buf, sizeof(message));
+    printf("message:%d\n%s\n", msg_buf[0], msg_buf);
+    if (n < 0) {
+        log_error(session_id, "Error writing to socket");
+    }
+    free(msg_buf);
     return n;
 }
 

@@ -1,3 +1,4 @@
+#include <errno.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -144,7 +145,7 @@ void open_session(std::string hostname) {
     portno = 2121;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        log_error(session_id, "Couldn't open socket");
+        log_error(session_id, "Could not open socket");
         return;
     }
     bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -156,7 +157,7 @@ void open_session(std::string hostname) {
 
     // Connect to server
     if (connect(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
-        log_error(0, "Couldn't connect to %s:%d", hostname.c_str(), portno);
+        log_error(0, "Could not connect to %s:%d", hostname.c_str(), portno);
         return;
     } else {
         log_info(session_id, "Connected to %s:%d", hostname.c_str(), portno);
@@ -277,14 +278,85 @@ void remove_dir(std::string path) {
 
 
 void get_file(std::string path) {
-    send_message(sockfd, GET_INIT_REQUEST, session_id, path);
+    path = "./" + path;
+    FILE *file = fopen(path.c_str(), "w");
+    if (file == NULL) {
+        log_error(session_id, "Could not open file");
+        return;
+    }
+    send_message(sockfd, GET_REQUEST, session_id, path);
+    int n;
     message msg;
     read_message(sockfd, session_id, &msg);
+    if (msg.type == GET_REFUSE) {
+        log_error(session_id, msg.payload);
+    } else {
+        while (msg.type != TRANSFER_END) {
+            if (msg.type == TRANSFER_REQUEST) {
+                n = fwrite(msg.payload, msg.len, 1, file);
+                fseek(file, n, SEEK_CUR);
+                if (n == EOF && errno != 0) {
+                    send_message(sockfd, TRANSFER_ERROR, session_id, "Error writing to file");
+                    log_error(session_id, "Error writing to file");
+                } else {
+                    send_message(sockfd, TRANSFER_OK, session_id, "");
+                }
+            } else if (msg.type == TRANSFER_ERROR) {
+                log_error(session_id, msg.payload);
+                break;
+            } else {
+                broken_protocol(sockfd, 0);
+                break;
+            }
+        }
+    }
+    fclose(file);
 }
 
 
 void put_file(std::string path) {
-
+    path = "./" + path;
+    FILE *file = fopen(path.c_str(), "r");
+    if (file == NULL) {
+        log_error(session_id, "Could not open file");
+        return;
+    }
+    send_message(sockfd, PUT_REQUEST, session_id, path);
+    message response;
+    read_message(sockfd, session_id, &response);
+    if (response.type == PUT_WARN) {
+        log_warning(session_id, "Remote file already exists. Would you like to overwrite?(y/N)");
+        char resp = getc(stdin);
+        if (resp == 'y' || resp == 'Y') {
+            send_message(sockfd, PUT_CONFIRM, session_id, "");
+        } else {
+            send_message(sockfd, PUT_ABORT, session_id, "");
+            fclose(file);
+            return;
+        }
+    } else if (response.type == PUT_REFUSE) {
+        log_error(session_id, response.payload);
+        fclose(file);
+        return;
+    } else if (response.type != PUT_ACCEPT) {
+        broken_protocol(sockfd, session_id);
+        fclose(file);
+        return;
+    }
+    char file_buf[BUFFER_SIZE];
+    int n;
+    while ((n = fread(file_buf, 1, BUFFER_SIZE, file)) > 0) {
+        fseek(file, n, SEEK_CUR);
+        send_binary(sockfd, TRANSFER_REQUEST, session_id, n, file_buf);
+        read_message(sockfd, session_id, &response);
+        if (response.type == TRANSFER_ERROR) {
+            log_error(session_id, response.payload);
+            return;
+        } else if (response.type != TRANSFER_OK) {
+            broken_protocol(sockfd, session_id);
+        }
+    }
+    send_message(sockfd, TRANSFER_END, session_id, "");
 }
 
 

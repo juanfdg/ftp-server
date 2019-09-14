@@ -1,7 +1,7 @@
 #ifndef FTPSERVER_COMMON_H
 #define FTPSERVER_COMMON_H
 
-#define BUFFER_SIZE 10000
+#define BUFFER_SIZE 1000
 
 /* Protocol */
 enum MessageType {
@@ -30,12 +30,15 @@ enum MessageType {
     RM_REFUSE,
 
     // File manipulation
-    GET_INIT_REQUEST,
-    GET_INIT_REFUSE,
+    GET_REQUEST,
+    GET_REFUSE,
 
-    PUT_INIT_REQUEST,
-    PUT_INIT_ACCEPT,
-    PUT_INIT_REFUSE,
+    PUT_REQUEST,
+    PUT_ACCEPT,
+    PUT_REFUSE,
+    PUT_WARN,
+    PUT_CONFIRM,
+    PUT_ABORT,
 
     DEL_REQUEST,
     DEL_ACCEPT,
@@ -44,9 +47,7 @@ enum MessageType {
     TRANSFER_REQUEST,
     TRANSFER_OK,
     TRANSFER_ERROR,
-    TRANSFER_END_REQUEST,
-    TRANSFER_END_ACCEPT,
-    TRANSFER_END_ERROR,
+    TRANSFER_END
 };
 
 struct message {
@@ -58,6 +59,7 @@ struct message {
 typedef struct message message;
 
 int send_message(int sockfd, u_int8_t type, int session_id, std::string payload);
+int send_binary(int sockfd, u_int8_t type, int session_id, int len, const char *buf);
 int read_message(int sockfd, int session_id, message *msg);
 void broken_protocol(int sockfd, int session_id);
 

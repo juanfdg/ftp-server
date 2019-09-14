@@ -46,6 +46,8 @@ void make_dir(std::string payload);
 void remove_dir(std::string payload);
 
 /* Files manipulation */
+void send_file(std::string payload);
+void recv_file(std::string payload);
 void delete_file(std::string payload);
 
 
@@ -119,10 +121,10 @@ int main() {
             make_dir(msg.payload);
         } else if (msg.type == RM_REQUEST) {
             remove_dir(msg.payload);
-        } else if (msg.type == GET_INIT_REQUEST) {
-
-        } else if (msg.type == PUT_INIT_REQUEST) {
-
+        } else if (msg.type == GET_REQUEST) {
+            send_file(msg.payload);
+        } else if (msg.type == PUT_REQUEST) {
+            recv_file(msg.payload);
         } else if (msg.type == DEL_REQUEST) {
             delete_file(msg.payload);
         } else {
@@ -223,7 +225,11 @@ void change_dir(std::string payload) {
         send_message(sockfd, CD_ACCEPT, session_id, get_pwd());
         log_info(session_id, "Changed dir: %s", get_pwd().c_str());
     } else if (errno == ENOENT) {
-        std::string pld = "No such directory";
+        std::string pld = "Cannot enter dir '" + clean_path + "': No such directory";
+        send_message(sockfd, CD_REFUSE, session_id, pld);
+        log_error(session_id, pld.c_str());
+    }  else {
+        std::string pld = "Cannot enter dir '" + clean_path + "': Unknown error";
         send_message(sockfd, CD_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     }
@@ -273,6 +279,10 @@ void list_files(std::string payload) {
         send_message(sockfd, LS_ACCEPT, session_id, listing);
     } else if (errno == ENOENT) {
         send_message(sockfd, LS_REFUSE, session_id, "No such directory");
+    } else {
+        std::string pld = "Unknown error";
+        send_message(sockfd, LS_REFUSE, session_id, pld);
+        log_error(session_id, pld.c_str());
     }
 }
 
@@ -324,6 +334,10 @@ void make_dir(std::string payload) {
             args[2] = (char*)clean_path.c_str();
             execv("/bin/mkdir", args);
         }
+    } else {
+        std::string pld = "Cannot make dir '" + clean_path + "': Unknown error";
+        send_message(sockfd, MK_REFUSE, session_id, pld);
+        log_error(session_id, pld.c_str());
     }
 }
 
@@ -380,7 +394,165 @@ void remove_dir(std::string payload) {
         std::string pld = "Cannot remove dir '" + clean_path + "': No such file";
         send_message(sockfd, RM_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
+    } else {
+        std::string pld = "Cannot remove dir '" + clean_path + "': Unknown error";
+        send_message(sockfd, RM_REFUSE, session_id, pld);
+        log_error(session_id, pld.c_str());
     }
+}
+
+
+void send_file(std::string payload) {
+    std::string clean_path, substr;
+    std::vector<std::string> new_pwd = pwd;
+    int ini, end;
+    ini = end = 0;
+    while (end != -1 && ini < payload.size()) {
+        end = payload.find('/', ini);
+        if (end == 0) {
+            ++ini;
+            continue;
+        } else if (end == -1) {
+            substr = payload.substr(ini);
+        } else {
+            substr = payload.substr(ini, (end-ini));
+        }
+        if (substr == "..") {
+            // Forbid access outside base folder
+            if (new_pwd.empty()) {
+                send_message(sockfd, GET_REFUSE, session_id, "Forbidden access outside base server folder");
+                return;
+            }
+            new_pwd.pop_back();
+        } else if (substr != ".") {
+            new_pwd.push_back(substr);
+        }
+        ini = end + 1;
+    }
+    clean_path = base_path;
+    for (int i = 0; i < new_pwd.size(); ++i) {
+        clean_path += "/" + new_pwd[i];
+    }
+    FILE *file = fopen(clean_path.c_str(), "r");
+    char file_buf[BUFFER_SIZE];
+    message response;
+    if (file) {
+        log_info(session_id, "Starting to send file: %s", clean_path.c_str());
+        int n, chunk = 0;
+        while ((n = fread(file_buf, 1, BUFFER_SIZE, file)) > 0) {
+            log_info(session_id, "Chunk %d", chunk);
+            ++chunk;
+            fseek(file, n, SEEK_CUR);
+            send_binary(sockfd, TRANSFER_REQUEST, session_id, n, file_buf);
+            read_message(sockfd, session_id, &response);
+            if (response.type == TRANSFER_ERROR) {
+                log_error(session_id, response.payload);
+                break;
+            } else if (response.type != TRANSFER_OK) {
+                broken_protocol(sockfd, session_id);
+                exit(1);
+            }
+        } if (ferror(file)) {
+            std::string pld = "Error reading from file";
+            log_error(session_id, pld.c_str());
+            send_message(sockfd, TRANSFER_ERROR, session_id, pld);
+        }
+
+        log_info(session_id, "Transfer of file ended");
+        send_message(sockfd, TRANSFER_END, session_id, "");
+    } else if (errno == ENOENT) {
+        std::string pld = "Cannot send file '" + clean_path + "'";
+        send_message(sockfd, GET_REFUSE, session_id, pld + ": No such file");
+        log_error(session_id, pld.c_str());
+    } else {
+        std::string pld = "Cannot send file '" + clean_path + "'";
+        send_message(sockfd, GET_REFUSE, session_id, pld + ": Unknown error");
+        log_error(session_id, pld.c_str());
+    }
+    fclose(file);
+}
+
+
+void recv_file(std::string payload) {
+    std::string clean_path, substr;
+    std::vector<std::string> new_pwd = pwd;
+    int ini, end;
+    ini = end = 0;
+    while (end != -1 && ini < payload.size()) {
+        end = payload.find('/', ini);
+        if (end == 0) {
+            ++ini;
+            continue;
+        } else if (end == -1) {
+            substr = payload.substr(ini);
+        } else {
+            substr = payload.substr(ini, (end-ini));
+        }
+        if (substr == "..") {
+            // Forbid access outside base folder
+            if (new_pwd.empty()) {
+                send_message(sockfd, PUT_REFUSE, session_id, "Forbidden access outside base server folder");
+                return;
+            }
+            new_pwd.pop_back();
+        } else if (substr != ".") {
+            new_pwd.push_back(substr);
+        }
+        ini = end + 1;
+    }
+    clean_path = base_path;
+    for (int i = 0; i < new_pwd.size(); ++i) {
+        clean_path += "/" + new_pwd[i];
+    }
+
+    FILE *file = fopen(clean_path.c_str(), "r");
+    message msg;
+    if (file) {
+        send_message(sockfd, PUT_WARN, session_id, "");
+        log_warning(session_id, "File '%s' already exists.", clean_path.c_str());
+        read_message(sockfd, session_id, &msg);
+        if (msg.type == PUT_ABORT) {
+            log_info(session_id, "File transfer aborted");
+            fclose(file);
+            return;
+        } else if (msg.type != PUT_CONFIRM) {
+            broken_protocol(sockfd, 0);
+            fclose(file);
+            exit(1);
+        }
+    }
+    fclose(file);
+
+    file = fopen(clean_path.c_str(), "w");
+    if (file) {
+        send_message(sockfd, PUT_ACCEPT, session_id, "");
+        log_info(session_id, "Starting to receive file: %s", clean_path.c_str());
+        int n;
+        while (1) {
+            read_message(sockfd, session_id, &msg);
+            if (msg.type == TRANSFER_END) {
+                log_info(session_id, "Transfer of file ended");
+                break;
+            } else if (msg.type == TRANSFER_REQUEST) {
+                n = fwrite(msg.payload, msg.len, 1, file);
+                fseek(file, n, SEEK_CUR);
+                if (n == EOF && errno != 0) {
+                    send_message(sockfd, TRANSFER_ERROR, session_id, "Error while writing to file");
+                    log_error(session_id, "Error while writing to file");
+                } else {
+                    send_message(sockfd, TRANSFER_OK, session_id, "");
+                }
+                read_message(sockfd, session_id, &msg);
+            } else {
+                broken_protocol(sockfd, 0);
+                exit(1);
+            }
+        }
+    } else {
+        send_message(sockfd, PUT_REFUSE, session_id, "Could not open file");
+        log_error(session_id, "Could not open file");
+    }
+    fclose(file);
 }
 
 
@@ -430,7 +602,7 @@ void delete_file(std::string payload) {
         }
     } else if (errno == ENOENT) {
         std::string pld = "Cannot remove file '" + clean_path + "': No such file";
-        send_message(sockfd, RM_REFUSE, session_id, pld);
+        send_message(sockfd, DEL_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     }
 }
