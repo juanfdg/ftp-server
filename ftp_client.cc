@@ -17,6 +17,11 @@
 #define FAIL -1
 #define QUIT 0
 
+// General use variables
+std::string pwd;
+int session_id;
+
+// Network variables
 int sockfd, portno;
 struct sockaddr_in serv_addr;
 struct hostent *server;
@@ -25,10 +30,17 @@ struct hostent *server;
 int get_input();
 
 // Connection management
-void open_session(const char *hostname);
+void open_session(std::string hostname);
 void close_session();
 
+// Directories navigation and listing
+void change_dir(std::string path);
+void list_files(std::string path);
+void get_pwd();
+
+
 int main(int argc, char *argv[]) {
+    session_id = 0;
     while(get_input() != QUIT);
     return 0;
 }
@@ -44,34 +56,50 @@ int get_input() {
 
     if(command == "open") {
         if (arg.empty()) {
-            log_error(NULL, "Usage: open <server>");
+            log_error(session_id, "Usage: open <server>");
             return FAIL;
         }
-        open_session(arg.c_str());
+        open_session(arg);
         return SUCCESS;
-    } else if(command == "close") {
+    } else if (command == "close") {
         close_session();
         return SUCCESS;
-    } else if(command == "quit") {
+    } else if (command == "cd") {
+        if (arg.empty()) {
+            log_error(session_id, "Usage: cd <dirname>");
+            return FAIL;
+        }
+        change_dir(arg);
+    } else if (command == "ls") {
+        if (arg.empty()) {
+            list_files(".");
+        } else {
+            list_files(arg);
+        }
+        return SUCCESS;
+    } else if (command == "pwd") {
+        get_pwd();
+    } else if (command == "quit") {
+        close_session();
         return QUIT;
     } else {
-        log_error(NULL, "Command %s not recognized", command.c_str());
+        log_error(session_id, "Command %s not recognized", command.c_str());
         return FAIL;
     }
 }
 
 
-void open_session(const char *hostname) {
+void open_session(std::string hostname) {
     // Resolving server address
-    server = gethostbyname(hostname);
+    server = gethostbyname(hostname.c_str());
     if (server == NULL) {
-        log_error(NULL, "No host %s", hostname);
+        log_error(session_id, "No host %s", hostname.c_str());
         return;
     }
     portno = 2121;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        log_error(NULL, "Couldn't open socket");
+        log_error(session_id, "Couldn't open socket");
         return;
     }
     bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -83,10 +111,10 @@ void open_session(const char *hostname) {
 
     // Connect to server
     if (connect(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0) {
-        log_error(NULL, "Couldn't connect to %s:%d", hostname, portno);
+        log_error(0, "Couldn't connect to %s:%d", hostname.c_str(), portno);
         return;
     } else {
-        log_info(NULL, "Connected to %s:%d", hostname, portno);
+        log_info(session_id, "Connected to %s:%d", hostname.c_str(), portno);
     }
 
 
@@ -101,36 +129,73 @@ void open_session(const char *hostname) {
     int n;
     n = send_message(sockfd, OPEN_REQUEST, 0, payload);
     if (n < 0) {
-        log_error(NULL, "Error writing to socket");
+        log_error(session_id, "Error writing to socket");
         return;
     }
 
     // Receive response from server
     message msg;
-    n = read_message(sockfd, &msg);
-    if (n < 0) {
-        log_error(NULL, "Error reading from socket");
-        return;
-    }
+    read_message(sockfd, session_id, &msg);
+
     if (msg.type == OPEN_REFUSE) {
-        log_error(NULL, "Connection refused: %s", msg.payload);
+        log_error(session_id, "Connection refused: %s", msg.payload);
         close(sockfd);
     } else if (msg.type == OPEN_ACCEPT) {
-        log_info(NULL, "Connection accepted. Session ID: %d", msg.session_id);
+        log_info(session_id, "Connection accepted. Session ID: %d", msg.session_id);
+        pwd = "/";
     } else {
         broken_protocol(sockfd);
     }
 }
 
 
-void close_session(){
-    int n;
-    n = send_message(sockfd, CLOSE, 0, "");
-    if (n < 0) {
-        log_error(NULL, "Error writing to socket");
-        return;
-    }
-    log_info("123", "Session closed");
+void close_session() {
+    log_info(session_id, "Session closed");
+    send_message(sockfd, CLOSE, session_id, "");
     close(sockfd);
+    session_id = 0;
+    pwd = "/";
 }
 
+
+void change_dir(std::string path) {
+    send_message(sockfd, CD_REQUEST, session_id, path);
+    message msg;
+    read_message(sockfd, session_id, &msg);
+
+    if (msg.type == CD_REFUSE) {
+        log_error(session_id, "%s", msg.payload);
+    } else if (msg.type == CD_ACCEPT) {
+        log_info(session_id, "Changed dir: %s", msg.payload);
+        pwd = msg.payload;
+    } else {
+        broken_protocol(sockfd);
+    }
+}
+
+
+void list_files(std::string path) {
+    send_message(sockfd, LS_REQUEST, session_id, path);
+    message msg;
+    read_message(sockfd, session_id, &msg);
+
+    if (msg.type == LS_REFUSE) {
+        log_error(session_id, "%s", msg.payload);
+    } else if (msg.type == LS_ACCEPT) {
+        log_info(session_id, "Dir contents:\n%s", msg.payload);
+    } else {
+        broken_protocol(sockfd);
+    }
+}
+
+
+void get_pwd() {
+    send_message(sockfd, PWD_REQUEST, session_id, "");
+    message msg;
+    read_message(sockfd, session_id, &msg);
+    if (msg.type == PWD_REPLY) {
+        log_info(session_id, "Current dir: %s", msg.payload);
+    } else {
+        broken_protocol(sockfd);
+    }
+}

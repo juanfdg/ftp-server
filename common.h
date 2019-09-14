@@ -18,6 +18,8 @@ enum MessageType {
     LS_REQUEST,
     LS_ACCEPT,
     LS_REFUSE,
+    PWD_REQUEST,
+    PWD_REPLY,
 
     // Directory manipulation
     MK_REQUEST,
@@ -52,15 +54,15 @@ struct message {
 typedef struct message message;
 
 int send_message(int sockfd, u_int8_t type, int session_id, std::string payload);
-int read_message(int sockfd, message *msg);
+int read_message(int sockfd, int session_id, message *msg);
 void broken_protocol(int sockfd);
 
 
 /* Logging */
-void raise_error(const char *client, const char *fmt, ...);
-void log_error(const char *client, const char *fmt, ...);
-void log_warning(const char *client, const char *fmt, ...);
-void log_info(const char *client, const char *fmt, ...);
-void log_debug(const char *client, const char *fmt, ...);
+void raise_error(int session_id, const char *fmt, ...);
+void log_error(int session_id, const char *fmt, ...);
+void log_warning(int session_id, const char *fmt, ...);
+void log_info(int session_id, const char *fmt, ...);
+void log_debug(int session_id, const char *fmt, ...);
 
 #endif //FTPSERVER_COMMON_H

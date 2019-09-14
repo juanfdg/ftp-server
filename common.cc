@@ -10,17 +10,18 @@
 #include "common.h"
 
 
-void raise_error(const char*client, const char*fmt, ...) {
+void raise_error(int session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
         fprintf(stderr, "(ERROR)");
-        if (client) {
-            fprintf(stderr, "[%s]", client);
+        if (session_id > 0) {
+            fprintf(stderr, "[%d]", session_id);
         }
         fprintf(stderr, " ");
         if (errno) {
             fprintf(stderr, "%s: ", strerror(errno));
+            errno = 0;
         }
         vfprintf(stderr, fmt, args);
         fprintf(stderr, "\n");
@@ -31,17 +32,18 @@ void raise_error(const char*client, const char*fmt, ...) {
 }
 
 
-void log_error(const char*client, const char*fmt, ...) {
+void log_error(int session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
         fprintf(stderr, "(ERROR)");
-        if (client) {
-            fprintf(stderr, "[%s]", client);
+        if (session_id > 0) {
+            fprintf(stderr, "[%d]", session_id);
         }
         fprintf(stderr, " ");
         if (errno) {
             fprintf(stderr, "%s: ", strerror(errno));
+            errno = 0;
         }
         vfprintf(stderr, fmt, args);
         fprintf(stderr, "\n");
@@ -52,13 +54,13 @@ void log_error(const char*client, const char*fmt, ...) {
 }
 
 
-void log_warning(const char*client, const char*fmt, ...) {
+void log_warning(int session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
         printf("(WARNING)");
-        if (client) {
-            printf("[%s]", client);
+        if (session_id > 0) {
+            printf("[%d]", session_id);
         }
         printf(" ");
         vprintf(fmt, args);
@@ -69,13 +71,13 @@ void log_warning(const char*client, const char*fmt, ...) {
 }
 
 
-void log_info(const char*client, const char*fmt, ...) {
+void log_info(int session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
         printf("(INFO)");
-        if (client) {
-            printf("[%s]", client);
+        if (session_id > 0) {
+            printf("[%d]", session_id);
         }
         printf(" ");
         vprintf(fmt, args);
@@ -86,13 +88,13 @@ void log_info(const char*client, const char*fmt, ...) {
 }
 
 
-void log_debug(const char*client, const char*fmt, ...) {
+void log_debug(int session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
         printf("(DEBUG)");
-        if (client) {
-            printf("[%s]", client);
+        if (session_id > 0) {
+            printf("[%d]", session_id);
         }
         printf(" ");
         vprintf(fmt, args);
@@ -105,10 +107,11 @@ void log_debug(const char*client, const char*fmt, ...) {
 
 int send_message(int sockfd, u_int8_t type, int session_id, std::string payload) {
     if (payload.length() > BUFFER_SIZE) {
-        log_error(NULL, "Payload size bigger than buffer limit of %d bytes", BUFFER_SIZE);
+        log_error(session_id, "Payload size bigger than buffer limit of %d bytes", BUFFER_SIZE);
         return -1;
     }
     message msg;
+    bzero(&msg, sizeof(message));
     msg.type = type;
     msg.session_id = session_id;
     msg.len = payload.length();
@@ -118,20 +121,30 @@ int send_message(int sockfd, u_int8_t type, int session_id, std::string payload)
         s_len = sizeof(msg.len),
         s_payload = sizeof(msg.payload);
     char *buf = (char*)malloc(s_type+s_session_id+s_len+s_payload);
+    bzero(buf, BUFFER_SIZE);
     memcpy(buf, &msg.type, s_type);
     memcpy(buf+s_type, &msg.session_id, s_session_id);
     memcpy(buf+s_type+s_session_id, &msg.len, s_len);
     memcpy(buf+s_type+s_session_id+s_len, &msg.payload, s_payload);
     int n = write(sockfd, buf, sizeof(message));
+    if (n < 0) {
+        log_error(session_id, "Error writing to socket");
+    }
     free(buf);
     return n;
 }
 
 
-int read_message(int sockfd, message *msg) {
+int read_message(int sockfd, int session_id, message *msg) {
+    bzero(msg, sizeof(message));
     char *buf = (char*)malloc(sizeof(message));
+    bzero(buf, BUFFER_SIZE);
     int n = read(sockfd, buf, sizeof(message));
-    free(buf);
+    if (n < 0) {
+        log_error(session_id, "Error reading from socket");
+        free(buf);
+        return n;
+    }
     int s_type = sizeof(msg->type),
         s_session_id = sizeof(msg->session_id),
         s_len = sizeof(msg->len),
@@ -140,6 +153,8 @@ int read_message(int sockfd, message *msg) {
     memcpy(&msg->session_id, buf+s_type, s_session_id);
     memcpy(&msg->len, buf+s_type+s_session_id, s_len);
     memcpy(&msg->payload, buf+s_type+s_session_id+s_len, s_payload);
+    printf("%d\n", msg->type);
+    free(buf);
     return n;
 }
 
