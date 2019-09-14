@@ -30,12 +30,12 @@ enum MessageType {
     RM_REFUSE,
 
     // File manipulation
+    GET_INIT_REQUEST,
+    GET_INIT_REFUSE,
+
     PUT_INIT_REQUEST,
     PUT_INIT_ACCEPT,
     PUT_INIT_REFUSE,
-
-    GET_INIT_REQUEST,
-    GET_INIT_REFUSE,
 
     DEL_REQUEST,
     DEL_ACCEPT,

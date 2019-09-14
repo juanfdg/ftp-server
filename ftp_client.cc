@@ -42,6 +42,11 @@ void get_pwd();
 void make_dir(std::string path);
 void remove_dir(std::string path);
 
+// File manipulation
+void get_file(std::string path);
+void put_file(std::string path);
+void delete_file(std::string path);
+
 
 int main(int argc, char *argv[]) {
     session_id = 0;
@@ -103,25 +108,25 @@ int get_input() {
             log_error(0, "Usage: get <dirname>");
             return FAIL;
         }
-        remove_dir(arg);
+        get_file(arg);
         return SUCCESS;
     } else if (command == "put") {
         if (arg.empty()) {
             log_error(0, "Usage: put <dirname>");
             return FAIL;
         }
-        remove_dir(arg);
+        put_file(arg);
         return SUCCESS;
     } else if (command == "delete") {
         if (arg.empty()) {
             log_error(0, "Usage: delete <dirname>");
             return FAIL;
         }
-        remove_dir(arg);
+        delete_file(arg);
         return SUCCESS;
     } else if (command == "quit") {
-            close_session();
-            return QUIT;
+        close_session();
+        return QUIT;
     } else {
         log_error(session_id, "Command %s not recognized", command.c_str());
         return FAIL;
@@ -265,6 +270,33 @@ void remove_dir(std::string path) {
         log_error(session_id, "%s", msg.payload);
     } else if (msg.type == RM_ACCEPT) {
         log_info(session_id, "Removed dir: %s", msg.payload);
+    } else {
+        broken_protocol(sockfd, 0);
+    }
+}
+
+
+void get_file(std::string path) {
+    send_message(sockfd, GET_INIT_REQUEST, session_id, path);
+    message msg;
+    read_message(sockfd, session_id, &msg);
+}
+
+
+void put_file(std::string path) {
+
+}
+
+
+void delete_file(std::string path) {
+    send_message(sockfd, DEL_REQUEST, session_id, path);
+    message msg;
+    read_message(sockfd, session_id, &msg);
+
+    if (msg.type == DEL_REFUSE) {
+        log_error(session_id, "%s", msg.payload);
+    } else if (msg.type == DEL_ACCEPT) {
+        log_info(session_id, "Removed file: %s", msg.payload);
     } else {
         broken_protocol(sockfd, 0);
     }
