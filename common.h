@@ -37,6 +37,10 @@ enum MessageType {
     GET_INIT_REQUEST,
     GET_INIT_REFUSE,
 
+    DEL_REQUEST,
+    DEL_ACCEPT,
+    DEL_REFUSE,
+
     TRANSFER_REQUEST,
     TRANSFER_OK,
     TRANSFER_ERROR,
@@ -55,7 +59,7 @@ typedef struct message message;
 
 int send_message(int sockfd, u_int8_t type, int session_id, std::string payload);
 int read_message(int sockfd, int session_id, message *msg);
-void broken_protocol(int sockfd);
+void broken_protocol(int sockfd, int session_id);
 
 
 /* Logging */

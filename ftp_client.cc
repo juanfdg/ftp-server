@@ -38,6 +38,10 @@ void change_dir(std::string path);
 void list_files(std::string path);
 void get_pwd();
 
+// Directories manipulation
+void make_dir(std::string path);
+void remove_dir(std::string path);
+
 
 int main(int argc, char *argv[]) {
     session_id = 0;
@@ -56,7 +60,7 @@ int get_input() {
 
     if(command == "open") {
         if (arg.empty()) {
-            log_error(session_id, "Usage: open <server>");
+            log_error(0, "Usage: open <server>");
             return FAIL;
         }
         open_session(arg);
@@ -66,7 +70,7 @@ int get_input() {
         return SUCCESS;
     } else if (command == "cd") {
         if (arg.empty()) {
-            log_error(session_id, "Usage: cd <dirname>");
+            log_error(0, "Usage: cd <dirname>");
             return FAIL;
         }
         change_dir(arg);
@@ -79,9 +83,39 @@ int get_input() {
         return SUCCESS;
     } else if (command == "pwd") {
         get_pwd();
+    } else if (command == "mkdir") {
+        if (arg.empty()) {
+            log_error(0, "Usage: mkdir <dirname>");
+        }
+        make_dir(arg);
+        return SUCCESS;
+    } else if (command == "rmdir") {
+        if (arg.empty()) {
+            log_error(0, "Usage: rmdir <dirname>");
+        }
+        remove_dir(arg);
+        return SUCCESS;
+    } else if (command == "get") {
+        if (arg.empty()) {
+            log_error(0, "Usage: get <dirname>");
+        }
+        remove_dir(arg);
+        return SUCCESS;
+    } else if (command == "put") {
+        if (arg.empty()) {
+            log_error(0, "Usage: put <dirname>");
+        }
+        remove_dir(arg);
+        return SUCCESS;
+    } else if (command == "delete") {
+        if (arg.empty()) {
+            log_error(0, "Usage: delete <dirname>");
+        }
+        remove_dir(arg);
+        return SUCCESS;
     } else if (command == "quit") {
-        close_session();
-        return QUIT;
+            close_session();
+            return QUIT;
     } else {
         log_error(session_id, "Command %s not recognized", command.c_str());
         return FAIL;
@@ -144,7 +178,7 @@ void open_session(std::string hostname) {
         log_info(session_id, "Connection accepted. Session ID: %d", msg.session_id);
         pwd = "/";
     } else {
-        broken_protocol(sockfd);
+        broken_protocol(sockfd, 0);
     }
 }
 
@@ -169,7 +203,7 @@ void change_dir(std::string path) {
         log_info(session_id, "Changed dir: %s", msg.payload);
         pwd = msg.payload;
     } else {
-        broken_protocol(sockfd);
+        broken_protocol(sockfd, 0);
     }
 }
 
@@ -184,7 +218,7 @@ void list_files(std::string path) {
     } else if (msg.type == LS_ACCEPT) {
         log_info(session_id, "Dir contents:\n%s", msg.payload);
     } else {
-        broken_protocol(sockfd);
+        broken_protocol(sockfd, 0);
     }
 }
 
@@ -196,6 +230,36 @@ void get_pwd() {
     if (msg.type == PWD_REPLY) {
         log_info(session_id, "Current dir: %s", msg.payload);
     } else {
-        broken_protocol(sockfd);
+        broken_protocol(sockfd, 0);
+    }
+}
+
+
+void make_dir(std::string path) {
+    send_message(sockfd, MK_REQUEST, session_id, path);
+    message msg;
+    read_message(sockfd, session_id, &msg);
+
+    if (msg.type == MK_REFUSE) {
+        log_error(session_id, "%s", msg.payload);
+    } else if (msg.type == MK_ACCEPT) {
+        log_info(session_id, "Created dir: %s", msg.payload);
+    } else {
+        broken_protocol(sockfd, 0);
+    }
+}
+
+
+void remove_dir(std::string path) {
+    send_message(sockfd, RM_REQUEST, session_id, path);
+    message msg;
+    read_message(sockfd, session_id, &msg);
+
+    if (msg.type == RM_REFUSE) {
+        log_error(session_id, "%s", msg.payload);
+    } else if (msg.type == RM_ACCEPT) {
+        log_info(session_id, "Removed dir: %s", msg.payload);
+    } else {
+        broken_protocol(sockfd, 0);
     }
 }

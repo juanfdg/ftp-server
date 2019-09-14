@@ -159,7 +159,7 @@ int read_message(int sockfd, int session_id, message *msg) {
 }
 
 
-void broken_protocol(int sockfd){
-    log_error(NULL, "Message received out of protocol");
+void broken_protocol(int sockfd, int session_id){
+    log_error(session_id, "Message received out of protocol");
     close(sockfd);
 }

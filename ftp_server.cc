@@ -42,6 +42,11 @@ void list_files(std::string payload);
 std::string get_pwd();
 
 
+/* Directories manipulation */
+void make_dir(std::string payload);
+void remove_dir(std::string payload);
+
+
 int main() {
     session_id = 0;
 
@@ -108,9 +113,19 @@ int main() {
             list_files(msg.payload);
         } else if (msg.type == PWD_REQUEST) {
             send_message(sockfd, PWD_REPLY, session_id, get_pwd());
+        } else if (msg.type == MK_REQUEST) {
+            make_dir(msg.payload);
+        } else if (msg.type == RM_REQUEST) {
+            remove_dir(msg.payload);
+        } else if (msg.type == GET_INIT_REQUEST) {
+
+        } else if (msg.type == PUT_INIT_REQUEST) {
+
+        } else if (msg.type == DEL_REQUEST) {
+
         } else {
-            broken_protocol(sockfd);
-            exit(1);
+                broken_protocol(sockfd, session_id);
+                exit(1);
         }
     }
 
@@ -206,7 +221,9 @@ void change_dir(std::string payload) {
         send_message(sockfd, CD_ACCEPT, session_id, get_pwd());
         log_info(session_id, "Changed dir: %s", get_pwd().c_str());
     } else if (errno == ENOENT) {
-        send_message(sockfd, CD_REFUSE, session_id, "No such directory");
+        std::string pld = "No such directory";
+        send_message(sockfd, CD_REFUSE, session_id, pld);
+        log_error(session_id, pld.c_str());
     }
 }
 
@@ -254,5 +271,112 @@ void list_files(std::string payload) {
         send_message(sockfd, LS_ACCEPT, session_id, listing);
     } else if (errno == ENOENT) {
         send_message(sockfd, LS_REFUSE, session_id, "No such directory");
+    }
+}
+
+
+void make_dir(std::string payload) {
+    std::string clean_path, substr;
+    std::vector<std::string> new_pwd = pwd;
+    int ini, end;
+    ini = end = 0;
+    while (end != -1 && ini < payload.size()) {
+        end = payload.find('/', ini);
+        if (end == 0) {
+            ++ini;
+            continue;
+        } else if (end == -1) {
+            substr = payload.substr(ini);
+        } else {
+            substr = payload.substr(ini, (end-ini));
+        }
+        if (substr == "..") {
+            // Forbid access outside base folder
+            if (new_pwd.empty()) {
+                send_message(sockfd, MK_REFUSE, session_id, "Forbidden access outside base server folder");
+                return;
+            }
+            new_pwd.pop_back();
+        } else if (substr != ".") {
+            new_pwd.push_back(substr);
+        }
+        ini = end + 1;
+    }
+    clean_path = base_path;
+    for (int i = 0; i < new_pwd.size(); ++i) {
+        clean_path += "/" + new_pwd[i];
+    }
+    DIR *d = opendir(clean_path.c_str());
+    if (d) {
+        closedir(d);
+        std::string pld = "Cannot make dir '" + clean_path + "': File exists";
+        send_message(sockfd, MK_REFUSE, session_id, pld);
+    } else if (errno == ENOENT) {
+        int pid = fork();
+        if (pid > 0) {
+            waitpid(pid, NULL, 0);
+            send_message(sockfd, MK_ACCEPT, session_id, clean_path);
+            log_info(session_id, "Created dir: %s", clean_path.c_str());
+        } else {
+            char * args[] = {"mkdir", "-p", NULL, NULL};
+            args[2] = (char*)clean_path.c_str();
+            execv("/bin/mkdir", args);
+        }
+    }
+}
+
+
+void remove_dir(std::string payload) {
+    std::string clean_path, substr;
+    std::vector<std::string> new_pwd = pwd;
+    int ini, end;
+    ini = end = 0;
+    while (end != -1 && ini < payload.size()) {
+        end = payload.find('/', ini);
+        if (end == 0) {
+            ++ini;
+            continue;
+        } else if (end == -1) {
+            substr = payload.substr(ini);
+        } else {
+            substr = payload.substr(ini, (end-ini));
+        }
+        if (substr == "..") {
+            // Forbid access outside base folder
+            if (new_pwd.empty()) {
+                send_message(sockfd, RM_REFUSE, session_id, "Forbidden access outside base server folder");
+                return;
+            }
+            new_pwd.pop_back();
+        } else if (substr != ".") {
+            new_pwd.push_back(substr);
+        }
+        ini = end + 1;
+    }
+    if (new_pwd.size() < pwd.size() || new_pwd == pwd) {
+        send_message(sockfd, RM_REFUSE, session_id, "Cannot remove current or parent directory");
+        return;
+    }
+    clean_path = base_path;
+    for (int i = 0; i < new_pwd.size(); ++i) {
+        clean_path += "/" + new_pwd[i];
+    }
+    DIR *d = opendir(clean_path.c_str());
+    if (d) {
+        int pid = fork();
+        if (pid > 0) {
+            waitpid(pid, NULL, 0);
+            send_message(sockfd, RM_ACCEPT, session_id, clean_path);
+            log_info(session_id, "Removed dir: %s", clean_path.c_str());
+        } else {
+            char * args[] = {"rm", "-rf", NULL, NULL};
+            args[2] = (char*)clean_path.c_str();
+            execv("/bin/rm", args);
+        }
+        closedir(d);
+    } else if (errno == ENOENT) {
+        std::string pld = "Cannot remove dir '" + clean_path + "': No such file";
+        send_message(sockfd, RM_REFUSE, session_id, pld);
+        log_error(session_id, pld.c_str());
     }
 }
