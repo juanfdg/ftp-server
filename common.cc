@@ -165,7 +165,6 @@ int send_binary(int sockfd, u_int8_t type, int session_id, int len, const char *
     memcpy(msg_buf+s_type+s_session_id+s_len, &msg.payload, s_payload);
 
     int n = write(sockfd, msg_buf, s_buf);
-    printf("message:%d\n%s\n", msg_buf[0], msg_buf);
     if (n < 0) {
         log_error(session_id, "Error writing to socket");
     }
@@ -194,7 +193,7 @@ int read_message(int sockfd, int session_id, message *msg) {
     memcpy(&msg->session_id, buf+s_type, s_session_id);
     memcpy(&msg->len, buf+s_type+s_session_id, s_len);
     memcpy(&msg->payload, buf+s_type+s_session_id+s_len, s_payload);
-    printf("%d\n", msg->type);
+    //printf("%d\n", msg->type);
     free(buf);
     return n;
 }

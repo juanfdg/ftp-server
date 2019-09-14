@@ -438,11 +438,8 @@ void send_file(std::string payload) {
     message response;
     if (file) {
         log_info(session_id, "Starting to send file: %s", clean_path.c_str());
-        int n, chunk = 0;
+        int n;
         while ((n = fread(file_buf, 1, BUFFER_SIZE, file)) > 0) {
-            log_info(session_id, "Chunk %d", chunk);
-            ++chunk;
-            fseek(file, n, SEEK_CUR);
             send_binary(sockfd, TRANSFER_REQUEST, session_id, n, file_buf);
             read_message(sockfd, session_id, &response);
             if (response.type == TRANSFER_ERROR) {

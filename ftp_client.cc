@@ -18,6 +18,8 @@
 #define FAIL -1
 #define QUIT 0
 
+#define DOT_FREQUENCY 50000
+
 // General use variables
 std::string pwd;
 int session_id;
@@ -291,23 +293,32 @@ void get_file(std::string path) {
     if (msg.type == GET_REFUSE) {
         log_error(session_id, msg.payload);
     } else {
-        while (msg.type != TRANSFER_END) {
-            if (msg.type == TRANSFER_REQUEST) {
-                n = fwrite(msg.payload, msg.len, 1, file);
-                fseek(file, n, SEEK_CUR);
-                if (n == EOF && errno != 0) {
-                    send_message(sockfd, TRANSFER_ERROR, session_id, "Error writing to file");
-                    log_error(session_id, "Error writing to file");
-                } else {
-                    send_message(sockfd, TRANSFER_OK, session_id, "");
-                }
-            } else if (msg.type == TRANSFER_ERROR) {
-                log_error(session_id, msg.payload);
-                break;
+        log_info(session_id, "Receiving remote file");
+        int chunks = 0;
+        while (msg.type == TRANSFER_REQUEST) {
+            n = fwrite(msg.payload, msg.len, 1, file);
+            fseek(file, 0, SEEK_END);
+            if (n == EOF && errno != 0) {
+                send_message(sockfd, TRANSFER_ERROR, session_id, "Error writing to file");
+                log_error(session_id, "Error writing to file");
+                fclose(file);
+                return;
             } else {
-                broken_protocol(sockfd, 0);
-                break;
+                if (chunks == 0) {
+                    printf(".");
+                }
+                chunks = (chunks + 1) % DOT_FREQUENCY;
+                send_message(sockfd, TRANSFER_OK, session_id, "");
+                read_message(sockfd, session_id, &msg);
             }
+        }
+        if (msg.type == TRANSFER_END) {
+            printf("\n");
+            log_info(session_id, "File transmission ended");
+        } else if (msg.type == TRANSFER_ERROR) {
+            log_error(session_id, msg.payload);
+        } else {
+            broken_protocol(sockfd, 0);
         }
     }
     fclose(file);
