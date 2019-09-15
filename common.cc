@@ -193,7 +193,6 @@ int read_message(int sockfd, int session_id, message *msg) {
     memcpy(&msg->session_id, buf+s_type, s_session_id);
     memcpy(&msg->len, buf+s_type+s_session_id, s_len);
     memcpy(&msg->payload, buf+s_type+s_session_id+s_len, s_payload);
-    //printf("%d\n", msg->type);
     free(buf);
     return n;
 }

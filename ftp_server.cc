@@ -444,19 +444,22 @@ void send_file(std::string payload) {
             read_message(sockfd, session_id, &response);
             if (response.type == TRANSFER_ERROR) {
                 log_error(session_id, response.payload);
-                break;
+                fclose(file);
+                return;
             } else if (response.type != TRANSFER_OK) {
                 broken_protocol(sockfd, session_id);
                 exit(1);
             }
-        } if (ferror(file)) {
+        }
+
+        if (ferror(file)) {
             std::string pld = "Error reading from file";
             log_error(session_id, pld.c_str());
             send_message(sockfd, TRANSFER_ERROR, session_id, pld);
+        } else {
+            log_info(session_id, "File transmission ended");
+            send_message(sockfd, TRANSFER_END, session_id, "");
         }
-
-        log_info(session_id, "Transfer of file ended");
-        send_message(sockfd, TRANSFER_END, session_id, "");
     } else if (errno == ENOENT) {
         std::string pld = "Cannot send file '" + clean_path + "'";
         send_message(sockfd, GET_REFUSE, session_id, pld + ": No such file");
@@ -517,33 +520,35 @@ void recv_file(std::string payload) {
             fclose(file);
             exit(1);
         }
+        fclose(file);
     }
-    fclose(file);
 
     file = fopen(clean_path.c_str(), "w");
     if (file) {
         send_message(sockfd, PUT_ACCEPT, session_id, "");
         log_info(session_id, "Starting to receive file: %s", clean_path.c_str());
         int n;
-        while (1) {
-            read_message(sockfd, session_id, &msg);
-            if (msg.type == TRANSFER_END) {
-                log_info(session_id, "Transfer of file ended");
-                break;
-            } else if (msg.type == TRANSFER_REQUEST) {
-                n = fwrite(msg.payload, msg.len, 1, file);
-                fseek(file, n, SEEK_CUR);
-                if (n == EOF && errno != 0) {
-                    send_message(sockfd, TRANSFER_ERROR, session_id, "Error while writing to file");
-                    log_error(session_id, "Error while writing to file");
-                } else {
-                    send_message(sockfd, TRANSFER_OK, session_id, "");
-                }
-                read_message(sockfd, session_id, &msg);
+        read_message(sockfd, session_id, &msg);
+        while (msg.type == TRANSFER_REQUEST) {
+            n = fwrite(msg.payload, msg.len, 1, file);
+            fseek(file, 0, SEEK_END);
+            if (n == EOF && errno != 0) {
+                send_message(sockfd, TRANSFER_ERROR, session_id, "Error writing to file");
+                log_error(session_id, "Error writing to file");
+                fclose(file);
+                return;
             } else {
-                broken_protocol(sockfd, 0);
-                exit(1);
+                send_message(sockfd, TRANSFER_OK, session_id, "");
+                read_message(sockfd, session_id, &msg);
             }
+        }
+        if (msg.type == TRANSFER_END) {
+            printf("\n");
+            log_info(session_id, "File transmission ended");
+        } else if (msg.type == TRANSFER_ERROR) {
+            log_error(session_id, msg.payload);
+        } else {
+            broken_protocol(sockfd, 0);
         }
     } else {
         send_message(sockfd, PUT_REFUSE, session_id, "Could not open file");

@@ -18,7 +18,7 @@
 #define FAIL -1
 #define QUIT 0
 
-#define DOT_FREQUENCY 50000
+#define DOT_FREQUENCY 100000
 
 // General use variables
 std::string pwd;
@@ -341,37 +341,63 @@ void put_file(std::string path) {
     read_message(sockfd, session_id, &response);
     if (response.type == PUT_WARN) {
         log_warning(session_id, "Remote file already exists. Would you like to overwrite?(y/N)");
-        char resp = getc(stdin);
+        char resp;
+        scanf("%c", &resp);
+        getchar(); // Consume new line
         if (resp == 'y' || resp == 'Y') {
             send_message(sockfd, PUT_CONFIRM, session_id, "");
+            read_message(sockfd, session_id, &response);
         } else {
             send_message(sockfd, PUT_ABORT, session_id, "");
             fclose(file);
             return;
         }
-    } else if (response.type == PUT_REFUSE) {
+    }
+
+    if (response.type == PUT_REFUSE) {
         log_error(session_id, response.payload);
         fclose(file);
         return;
-    } else if (response.type != PUT_ACCEPT) {
+    } else if (response.type == PUT_ACCEPT) {
+        log_info(session_id, "Sending local file");
+    } else {
         broken_protocol(sockfd, session_id);
         fclose(file);
         return;
     }
+
     char file_buf[BUFFER_SIZE];
-    int n;
+    int n, chunks = 0;
     while ((n = fread(file_buf, 1, BUFFER_SIZE, file)) > 0) {
-        fseek(file, n, SEEK_CUR);
         send_binary(sockfd, TRANSFER_REQUEST, session_id, n, file_buf);
         read_message(sockfd, session_id, &response);
         if (response.type == TRANSFER_ERROR) {
             log_error(session_id, response.payload);
+            fclose(file);
             return;
-        } else if (response.type != TRANSFER_OK) {
+        } else if (response.type == TRANSFER_OK) {
+            if (chunks == 0) {
+                printf(".");
+                fflush(stdout);
+            }
+            chunks = (chunks + 1) % DOT_FREQUENCY;
+        } else {
             broken_protocol(sockfd, session_id);
+            fclose(file);
+            return;
         }
     }
-    send_message(sockfd, TRANSFER_END, session_id, "");
+
+    if (ferror(file)) {
+        std::string pld = "Error reading from file";
+        log_error(session_id, pld.c_str());
+        send_message(sockfd, TRANSFER_ERROR, session_id, pld);
+    } else {
+        printf("\n");
+        log_info(session_id, "File transmission ended");
+        send_message(sockfd, TRANSFER_END, session_id, "");
+    }
+    fclose(file);
 }
 
 
