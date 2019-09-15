@@ -41,7 +41,7 @@ void open(std::string payload);
 /* Directories navigation and listing */
 void change_dir(std::string payload);
 void list_files(std::string payload);
-std::string get_pwd();
+std::string get_pwd(std::vector<std::string> pwd);
 
 /* Directories manipulation */
 void make_dir(std::string payload);
@@ -118,7 +118,7 @@ int main() {
         } else if (msg.type == LS_REQUEST) {
             list_files(msg.payload);
         } else if (msg.type == PWD_REQUEST) {
-            send_message(sockfd, PWD_REPLY, session_id, get_pwd());
+            send_message(sockfd, PWD_REPLY, session_id, get_pwd(pwd));
         } else if (msg.type == MK_REQUEST) {
             make_dir(msg.payload);
         } else if (msg.type == RM_REQUEST) {
@@ -190,7 +190,7 @@ void open(std::string payload) {
 }
 
 
-std::string get_pwd() {
+std::string get_pwd(std::vector<std::string> pwd) {
     std::string pwd_str = "~";
     for (int i = 0; i < pwd.size(); ++i) {
         pwd_str += "/" + pwd[i];
@@ -235,14 +235,14 @@ void change_dir(std::string payload) {
         closedir(new_dir);
         pwd.clear();
         pwd = new_pwd;
-        send_message(sockfd, CD_ACCEPT, session_id, get_pwd());
-        log_info(session_id, "Changed dir: %s", get_pwd().c_str());
+        send_message(sockfd, CD_ACCEPT, session_id, get_pwd(pwd));
+        log_info(session_id, "Changed dir: %s", get_pwd(pwd).c_str());
     } else if (errno == ENOENT) {
-        std::string pld = "Cannot enter dir '" + clean_path + "': No such directory";
+        std::string pld = "Cannot enter dir '" + get_pwd(new_pwd) + "': No such directory";
         send_message(sockfd, CD_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     }  else {
-        std::string pld = "Cannot enter dir '" + clean_path + "': Unknown error";
+        std::string pld = "Cannot enter dir '" + get_pwd(new_pwd) + "': Unknown error";
         send_message(sockfd, CD_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     }
@@ -334,21 +334,21 @@ void make_dir(std::string payload) {
     DIR *d = opendir(clean_path.c_str());
     if (d) {
         closedir(d);
-        std::string pld = "Cannot make dir '" + clean_path + "': File exists";
+        std::string pld = "Cannot make dir '" + get_pwd(new_pwd) + "': File exists";
         send_message(sockfd, MK_REFUSE, session_id, pld);
     } else if (errno == ENOENT) {
         int pid = fork();
         if (pid > 0) {
             waitpid(pid, NULL, 0);
-            send_message(sockfd, MK_ACCEPT, session_id, clean_path);
-            log_info(session_id, "Created dir: %s", clean_path.c_str());
+            send_message(sockfd, MK_ACCEPT, session_id, get_pwd(new_pwd));
+            log_info(session_id, "Created dir: %s", get_pwd(new_pwd).c_str());
         } else {
             char * args[] = {"mkdir", "-p", NULL, NULL};
             args[2] = (char*)clean_path.c_str();
             execv("/bin/mkdir", args);
         }
     } else {
-        std::string pld = "Cannot make dir '" + clean_path + "': Unknown error";
+        std::string pld = "Cannot make dir '" + get_pwd(new_pwd) + "': Unknown error";
         send_message(sockfd, MK_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     }
@@ -396,19 +396,19 @@ void remove_dir(std::string payload) {
         int pid = fork();
         if (pid > 0) {
             waitpid(pid, NULL, 0);
-            send_message(sockfd, RM_ACCEPT, session_id, clean_path);
-            log_info(session_id, "Removed dir: %s", clean_path.c_str());
+            send_message(sockfd, RM_ACCEPT, session_id, get_pwd(new_pwd));
+            log_info(session_id, "Removed dir: %s", get_pwd(new_pwd).c_str());
         } else {
             char * args[] = {"rm", "-rf", NULL, NULL};
             args[2] = (char*)clean_path.c_str();
             execv("/bin/rm", args);
         }
     } else if (errno == ENOENT) {
-        std::string pld = "Cannot remove dir '" + clean_path + "': No such file";
+        std::string pld = "Cannot remove dir '" + get_pwd(new_pwd) + "': No such file";
         send_message(sockfd, RM_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     } else {
-        std::string pld = "Cannot remove dir '" + clean_path + "': Unknown error";
+        std::string pld = "Cannot remove dir '" + get_pwd(new_pwd) + "': Unknown error";
         send_message(sockfd, RM_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     }
@@ -450,7 +450,7 @@ void send_file(std::string payload) {
     char file_buf[BUFFER_SIZE];
     message response;
     if (file) {
-        log_info(session_id, "Starting to send file: %s", clean_path.c_str());
+        log_info(session_id, "Starting to send file: %s", get_pwd(new_pwd).c_str());
         int n;
         while ((n = fread(file_buf, 1, BUFFER_SIZE, file)) > 0) {
             send_binary(sockfd, TRANSFER_REQUEST, session_id, n, file_buf);
@@ -474,11 +474,11 @@ void send_file(std::string payload) {
             send_message(sockfd, TRANSFER_END, session_id, "");
         }
     } else if (errno == ENOENT) {
-        std::string pld = "Cannot send file '" + clean_path + "'";
+        std::string pld = "Cannot send file '" + get_pwd(new_pwd) + "'";
         send_message(sockfd, GET_REFUSE, session_id, pld + ": No such file");
         log_error(session_id, pld.c_str());
     } else {
-        std::string pld = "Cannot send file '" + clean_path + "'";
+        std::string pld = "Cannot send file '" + get_pwd(new_pwd) + "'";
         send_message(sockfd, GET_REFUSE, session_id, pld + ": Unknown error");
         log_error(session_id, pld.c_str());
     }
@@ -522,7 +522,7 @@ void recv_file(std::string payload) {
     message msg;
     if (file) {
         send_message(sockfd, PUT_WARN, session_id, "");
-        log_warning(session_id, "File '%s' already exists.", clean_path.c_str());
+        log_warning(session_id, "File '%s' already exists.", get_pwd(new_pwd).c_str());
         read_message(sockfd, session_id, &msg);
         if (msg.type == PUT_ABORT) {
             log_info(session_id, "File transfer aborted");
@@ -539,7 +539,7 @@ void recv_file(std::string payload) {
     file = fopen(clean_path.c_str(), "w");
     if (file) {
         send_message(sockfd, PUT_ACCEPT, session_id, "");
-        log_info(session_id, "Starting to receive file: %s", clean_path.c_str());
+        log_info(session_id, "Starting to receive file: %s", get_pwd(new_pwd).c_str());
         int n;
         read_message(sockfd, session_id, &msg);
         while (msg.type == TRANSFER_REQUEST) {
@@ -608,15 +608,15 @@ void delete_file(std::string payload) {
         int pid = fork();
         if (pid > 0) {
             waitpid(pid, NULL, 0);
-            send_message(sockfd, DEL_ACCEPT, session_id, clean_path);
-            log_info(session_id, "Removed file: %s", clean_path.c_str());
+            send_message(sockfd, DEL_ACCEPT, session_id, get_pwd(new_pwd));
+            log_info(session_id, "Removed file: %s", get_pwd(new_pwd).c_str());
         } else {
             char * args[] = {"rm", NULL, NULL};
             args[1] = (char*)clean_path.c_str();
             execv("/bin/rm", args);
         }
     } else if (errno == ENOENT) {
-        std::string pld = "Cannot remove file '" + clean_path + "': No such file";
+        std::string pld = "Cannot remove file '" + get_pwd(new_pwd) + "': No such file";
         send_message(sockfd, DEL_REFUSE, session_id, pld);
         log_error(session_id, pld.c_str());
     }
