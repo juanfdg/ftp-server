@@ -69,6 +69,5 @@ void raise_error(int session_id, const char *fmt, ...);
 void log_error(int session_id, const char *fmt, ...);
 void log_warning(int session_id, const char *fmt, ...);
 void log_info(int session_id, const char *fmt, ...);
-void log_debug(int session_id, const char *fmt, ...);
 
 #endif //FTPSERVER_COMMON_H

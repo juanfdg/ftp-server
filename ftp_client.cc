@@ -20,10 +20,6 @@
 
 #define DOT_FREQUENCY 100000
 
-// General use variables
-std::string pwd;
-int session_id;
-
 // Network variables
 int sockfd, portno;
 struct sockaddr_in serv_addr;
@@ -52,7 +48,6 @@ void delete_file(std::string path);
 
 
 int main(int argc, char *argv[]) {
-    session_id = 0;
     while(get_input() != QUIT);
     return 0;
 }
@@ -135,7 +130,7 @@ int get_input() {
         close_session();
         return QUIT;
     } else {
-        log_error(session_id, "Command %s not recognized", command.c_str());
+        log_error(0, "Command %s not recognized", command.c_str());
         return FAIL;
     }
 }
@@ -145,13 +140,13 @@ void open_session(std::string hostname) {
     // Resolving server address
     server = gethostbyname(hostname.c_str());
     if (server == NULL) {
-        log_error(session_id, "No host %s", hostname.c_str());
+        log_error(0, "No host %s", hostname.c_str());
         return;
     }
     portno = 2121;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0) {
-        log_error(session_id, "Could not open socket");
+        log_error(0, "Could not open socket");
         return;
     }
     bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -166,7 +161,7 @@ void open_session(std::string hostname) {
         log_error(0, "Could not connect to %s:%d", hostname.c_str(), portno);
         return;
     } else {
-        log_info(session_id, "Connected to %s:%d", hostname.c_str(), portno);
+        log_info(0, "Connected to %s:%d", hostname.c_str(), portno);
     }
 
 
@@ -181,20 +176,19 @@ void open_session(std::string hostname) {
     int n;
     n = send_message(sockfd, OPEN_REQUEST, 0, payload);
     if (n < 0) {
-        log_error(session_id, "Error writing to socket");
+        log_error(0, "Error writing to socket");
         return;
     }
 
     // Receive response from server
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
 
     if (msg.type == OPEN_REFUSE) {
-        log_error(session_id, "Connection refused: %s", msg.payload);
+        log_error(0, "Connection refused: %s", msg.payload);
         close(sockfd);
     } else if (msg.type == OPEN_ACCEPT) {
-        log_info(session_id, "Connection accepted. Session ID: %d", msg.session_id);
-        pwd = "/";
+        log_info(0, "Connection accepted. Session ID: %d", msg.session_id);
     } else {
         broken_protocol(sockfd, 0);
     }
@@ -202,24 +196,21 @@ void open_session(std::string hostname) {
 
 
 void close_session() {
-    log_info(session_id, "Session closed");
-    send_message(sockfd, CLOSE, session_id, "");
+    log_info(0, "Session closed");
+    send_message(sockfd, CLOSE, 0, "");
     close(sockfd);
-    session_id = 0;
-    pwd = "/";
 }
 
 
 void change_dir(std::string path) {
-    send_message(sockfd, CD_REQUEST, session_id, path);
+    send_message(sockfd, CD_REQUEST, 0, path);
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
 
     if (msg.type == CD_REFUSE) {
-        log_error(session_id, "%s", msg.payload);
+        log_error(0, "%s", msg.payload);
     } else if (msg.type == CD_ACCEPT) {
-        log_info(session_id, "Changed dir: %s", msg.payload);
-        pwd = msg.payload;
+        log_info(0, "Changed dir: %s", msg.payload);
     } else {
         broken_protocol(sockfd, 0);
     }
@@ -227,14 +218,14 @@ void change_dir(std::string path) {
 
 
 void list_files(std::string path) {
-    send_message(sockfd, LS_REQUEST, session_id, path);
+    send_message(sockfd, LS_REQUEST, 0, path);
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
 
     if (msg.type == LS_REFUSE) {
-        log_error(session_id, "%s", msg.payload);
+        log_error(0, "%s", msg.payload);
     } else if (msg.type == LS_ACCEPT) {
-        log_info(session_id, "Dir contents:\n%s", msg.payload);
+        log_info(0, "Dir contents:\n%s", msg.payload);
     } else {
         broken_protocol(sockfd, 0);
     }
@@ -242,11 +233,11 @@ void list_files(std::string path) {
 
 
 void get_pwd() {
-    send_message(sockfd, PWD_REQUEST, session_id, "");
+    send_message(sockfd, PWD_REQUEST, 0, "");
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
     if (msg.type == PWD_REPLY) {
-        log_info(session_id, "Current dir: %s", msg.payload);
+        log_info(0, "Current dir: %s", msg.payload);
     } else {
         broken_protocol(sockfd, 0);
     }
@@ -254,14 +245,14 @@ void get_pwd() {
 
 
 void make_dir(std::string path) {
-    send_message(sockfd, MK_REQUEST, session_id, path);
+    send_message(sockfd, MK_REQUEST, 0, path);
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
 
     if (msg.type == MK_REFUSE) {
-        log_error(session_id, "%s", msg.payload);
+        log_error(0, "%s", msg.payload);
     } else if (msg.type == MK_ACCEPT) {
-        log_info(session_id, "Created dir: %s", msg.payload);
+        log_info(0, "Created dir: %s", msg.payload);
     } else {
         broken_protocol(sockfd, 0);
     }
@@ -269,14 +260,14 @@ void make_dir(std::string path) {
 
 
 void remove_dir(std::string path) {
-    send_message(sockfd, RM_REQUEST, session_id, path);
+    send_message(sockfd, RM_REQUEST, 0, path);
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
 
     if (msg.type == RM_REFUSE) {
-        log_error(session_id, "%s", msg.payload);
+        log_error(0, "%s", msg.payload);
     } else if (msg.type == RM_ACCEPT) {
-        log_info(session_id, "Removed dir: %s", msg.payload);
+        log_info(0, "Removed dir: %s", msg.payload);
     } else {
         broken_protocol(sockfd, 0);
     }
@@ -287,24 +278,24 @@ void get_file(std::string path) {
     path = "./" + path;
     FILE *file = fopen(path.c_str(), "w");
     if (file == NULL) {
-        log_error(session_id, "Could not open file");
+        log_error(0, "Could not open file");
         return;
     }
-    send_message(sockfd, GET_REQUEST, session_id, path);
+    send_message(sockfd, GET_REQUEST, 0, path);
     int n;
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
     if (msg.type == GET_REFUSE) {
-        log_error(session_id, msg.payload);
+        log_error(0, msg.payload);
     } else {
-        log_info(session_id, "Receiving remote file");
+        log_info(0, "Receiving remote file");
         int chunks = 0;
         while (msg.type == TRANSFER_REQUEST) {
             n = fwrite(msg.payload, msg.len, 1, file);
             fseek(file, 0, SEEK_END);
             if (n == EOF && errno != 0) {
-                send_message(sockfd, TRANSFER_ERROR, session_id, "Error writing to file");
-                log_error(session_id, "Error writing to file");
+                send_message(sockfd, TRANSFER_ERROR, 0, "Error writing to file");
+                log_error(0, "Error writing to file");
                 fclose(file);
                 return;
             } else {
@@ -312,15 +303,15 @@ void get_file(std::string path) {
                     printf(".");
                 }
                 chunks = (chunks + 1) % DOT_FREQUENCY;
-                send_message(sockfd, TRANSFER_OK, session_id, "");
-                read_message(sockfd, session_id, &msg);
+                send_message(sockfd, TRANSFER_OK, 0, "");
+                read_message(sockfd, 0, &msg);
             }
         }
         if (msg.type == TRANSFER_END) {
             printf("\n");
-            log_info(session_id, "File transmission ended");
+            log_info(0, "File transmission ended");
         } else if (msg.type == TRANSFER_ERROR) {
-            log_error(session_id, msg.payload);
+            log_error(0, msg.payload);
         } else {
             broken_protocol(sockfd, 0);
         }
@@ -333,35 +324,35 @@ void put_file(std::string path) {
     path = "./" + path;
     FILE *file = fopen(path.c_str(), "r");
     if (file == NULL) {
-        log_error(session_id, "Could not open file");
+        log_error(0, "Could not open file");
         return;
     }
-    send_message(sockfd, PUT_REQUEST, session_id, path);
+    send_message(sockfd, PUT_REQUEST, 0, path);
     message response;
-    read_message(sockfd, session_id, &response);
+    read_message(sockfd, 0, &response);
     if (response.type == PUT_WARN) {
-        log_warning(session_id, "Remote file already exists. Would you like to overwrite?(y/N)");
+        log_warning(0, "Remote file already exists. Would you like to overwrite?(y/N)");
         char resp;
         scanf("%c", &resp);
         getchar(); // Consume new line
         if (resp == 'y' || resp == 'Y') {
-            send_message(sockfd, PUT_CONFIRM, session_id, "");
-            read_message(sockfd, session_id, &response);
+            send_message(sockfd, PUT_CONFIRM, 0, "");
+            read_message(sockfd, 0, &response);
         } else {
-            send_message(sockfd, PUT_ABORT, session_id, "");
+            send_message(sockfd, PUT_ABORT, 0, "");
             fclose(file);
             return;
         }
     }
 
     if (response.type == PUT_REFUSE) {
-        log_error(session_id, response.payload);
+        log_error(0, response.payload);
         fclose(file);
         return;
     } else if (response.type == PUT_ACCEPT) {
-        log_info(session_id, "Sending local file");
+        log_info(0, "Sending local file");
     } else {
-        broken_protocol(sockfd, session_id);
+        broken_protocol(sockfd, 0);
         fclose(file);
         return;
     }
@@ -369,10 +360,10 @@ void put_file(std::string path) {
     char file_buf[BUFFER_SIZE];
     int n, chunks = 0;
     while ((n = fread(file_buf, 1, BUFFER_SIZE, file)) > 0) {
-        send_binary(sockfd, TRANSFER_REQUEST, session_id, n, file_buf);
-        read_message(sockfd, session_id, &response);
+        send_binary(sockfd, TRANSFER_REQUEST, 0, n, file_buf);
+        read_message(sockfd, 0, &response);
         if (response.type == TRANSFER_ERROR) {
-            log_error(session_id, response.payload);
+            log_error(0, response.payload);
             fclose(file);
             return;
         } else if (response.type == TRANSFER_OK) {
@@ -382,7 +373,7 @@ void put_file(std::string path) {
             }
             chunks = (chunks + 1) % DOT_FREQUENCY;
         } else {
-            broken_protocol(sockfd, session_id);
+            broken_protocol(sockfd, 0);
             fclose(file);
             return;
         }
@@ -390,26 +381,26 @@ void put_file(std::string path) {
 
     if (ferror(file)) {
         std::string pld = "Error reading from file";
-        log_error(session_id, pld.c_str());
-        send_message(sockfd, TRANSFER_ERROR, session_id, pld);
+        log_error(0, pld.c_str());
+        send_message(sockfd, TRANSFER_ERROR, 0, pld);
     } else {
         printf("\n");
-        log_info(session_id, "File transmission ended");
-        send_message(sockfd, TRANSFER_END, session_id, "");
+        log_info(0, "File transmission ended");
+        send_message(sockfd, TRANSFER_END, 0, "");
     }
     fclose(file);
 }
 
 
 void delete_file(std::string path) {
-    send_message(sockfd, DEL_REQUEST, session_id, path);
+    send_message(sockfd, DEL_REQUEST, 0, path);
     message msg;
-    read_message(sockfd, session_id, &msg);
+    read_message(sockfd, 0, &msg);
 
     if (msg.type == DEL_REFUSE) {
-        log_error(session_id, "%s", msg.payload);
+        log_error(0, "%s", msg.payload);
     } else if (msg.type == DEL_ACCEPT) {
-        log_info(session_id, "Removed file: %s", msg.payload);
+        log_info(0, "Removed file: %s", msg.payload);
     } else {
         broken_protocol(sockfd, 0);
     }

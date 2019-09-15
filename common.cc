@@ -88,23 +88,6 @@ void log_info(int session_id, const char*fmt, ...) {
 }
 
 
-void log_debug(int session_id, const char*fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
-    if(fmt) {
-        printf("(DEBUG)");
-        if (session_id > 0) {
-            printf("[%d]", session_id);
-        }
-        printf(" ");
-        vprintf(fmt, args);
-        printf("\n");
-    } else {
-        perror("");
-    }
-}
-
-
 int send_message(int sockfd, u_int8_t type, int session_id, std::string payload) {
     if (payload.length() > BUFFER_SIZE) {
         log_error(session_id, "Payload size bigger than buffer limit of %d bytes", BUFFER_SIZE);
