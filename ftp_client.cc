@@ -66,7 +66,9 @@ int get_input() {
     // Separate command from argument
     int pos = input.find(' ');
     command = input.substr(0, pos);
-    arg = input.substr(pos+1);
+    if (pos > 0) {
+        arg = input.substr(pos + 1);
+    }
 
     if(command == "open") {
         if (arg.empty()) {
