@@ -10,19 +10,21 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
-#include <vector>
+#include <time.h>
 
 #include <iostream>
+#include <fstream>
 #include <string>
 #include <vector>
 
 #include "common.h"
 
 // General use variables
-const std::string BASE_DIR_FROM_HOME("/ftp");
+const char BASE_DIR_FROM_HOME[] = "/ftp";
+const char PASSWD_FILE[] = "/.passwd";
 std::string base_path;
 std::vector<std::string> pwd;
-int session_id;
+uint16_t session_id;
 
 // Network variables
 int sockfd, portno;
@@ -108,7 +110,7 @@ int main() {
         if (msg.type == OPEN_REQUEST) {
             open(msg.payload);
         } else if (msg.type == CLOSE) {
-            log_info(session_id, "Session %d closed", 123);
+            log_info(session_id, "Session %d closed", session_id);
             close(sockfd);
             break;
         } else if (msg.type == CD_REQUEST) {
@@ -163,17 +165,28 @@ void open(std::string payload) {
     user = payload.substr(0, pos);
     passwd = payload.substr(pos+1);
 
+    // Open passwords file
+    std::fstream passwd_stream((base_path + PASSWD_FILE).c_str(), std::fstream::in);
+    std::string line, cur_user, cur_passwd;
+
     // Authentication
-    if (user == "simba" && passwd == "123") {
-        session_id = 123;
-        send_message(sockfd, OPEN_ACCEPT, session_id, "");
-        log_info(session_id, "Opened new session: %d", session_id);
-    } else {
-        char pld[] = "Username or password incorrect";
-        log_error(session_id, "%s", pld);
-        send_message(sockfd, OPEN_REFUSE, 0, pld);
-        exit(1);
+    while(std::getline(passwd_stream, line)) {
+        pos = line.find(':');
+        cur_user = line.substr(0,pos);
+        cur_passwd = line.substr(pos+1);
+        if (user == cur_user && passwd == cur_passwd) {
+            session_id = (uint16_t)time(NULL);
+            send_message(sockfd, OPEN_ACCEPT, session_id, "");
+            log_info(session_id, "Opened new session: %d", session_id);
+            return;
+        }
     }
+
+    // No authentication found
+    char pld[] = "Username or password incorrect";
+    log_error(session_id, "%s", pld);
+    send_message(sockfd, OPEN_REFUSE, 0, pld);
+    exit(1);
 }
 
 
