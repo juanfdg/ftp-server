@@ -59,8 +59,10 @@ int main(int argc, char *argv[]) {
 
 
 int get_input() {
+    printf(">>> ");
     std::string input, command, arg;
     std::getline(std::cin, input);
+    *input.end() = '\0';
     // Separate command from argument
     int pos = input.find(' ');
     command = input.substr(0, pos);
