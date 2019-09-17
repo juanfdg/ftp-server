@@ -155,6 +155,16 @@ void get_base_dir() {
             execv("/bin/mkdir", args);
         }
     }
+
+    // Check for passwd file
+    std::string passwd_path = base_path + "/.passwd";
+    FILE *file = fopen(passwd_path.c_str(), "r");
+    if (file) {
+        fclose(file);
+    } else {
+        file = fopen(passwd_path.c_str(), "w");
+        fprintf(file, "admin:passwd");
+    }
 }
 
 
