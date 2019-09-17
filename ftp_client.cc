@@ -24,6 +24,7 @@
 int sockfd, portno;
 struct sockaddr_in serv_addr;
 struct hostent *server;
+uint16_t session_id;
 
 // Get user input
 int get_input();
@@ -137,6 +138,12 @@ int get_input() {
 
 
 void open_session(std::string hostname) {
+    // Can't open if already in session
+    if (session_id != 0) {
+        log_error(0, "Already in a open session");
+        return;
+    }
+
     // Resolving server address
     server = gethostbyname(hostname.c_str());
     if (server == NULL) {
@@ -189,6 +196,7 @@ void open_session(std::string hostname) {
         close(sockfd);
     } else if (msg.type == OPEN_ACCEPT) {
         log_info(0, "Connection accepted. Session ID: %d", msg.session_id);
+        session_id = msg.session_id;
     } else {
         broken_protocol(sockfd, 0);
     }
@@ -199,6 +207,7 @@ void close_session() {
     log_info(0, "Session closed");
     send_message(sockfd, CLOSE, 0, "");
     close(sockfd);
+    session_id = 0;
 }
 
 
@@ -301,6 +310,7 @@ void get_file(std::string path) {
             } else {
                 if (chunks == 0) {
                     printf(".");
+                    fflush(stdout);
                 }
                 chunks = (chunks + 1) % DOT_FREQUENCY;
                 send_message(sockfd, TRANSFER_OK, 0, "");

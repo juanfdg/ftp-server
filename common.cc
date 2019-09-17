@@ -10,7 +10,7 @@
 #include "common.h"
 
 
-void raise_error(int session_id, const char*fmt, ...) {
+void raise_error(uint16_t session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
@@ -32,7 +32,7 @@ void raise_error(int session_id, const char*fmt, ...) {
 }
 
 
-void log_error(int session_id, const char*fmt, ...) {
+void log_error(uint16_t session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
@@ -54,7 +54,7 @@ void log_error(int session_id, const char*fmt, ...) {
 }
 
 
-void log_warning(int session_id, const char*fmt, ...) {
+void log_warning(uint16_t session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
@@ -71,7 +71,7 @@ void log_warning(int session_id, const char*fmt, ...) {
 }
 
 
-void log_info(int session_id, const char*fmt, ...) {
+void log_info(uint16_t session_id, const char*fmt, ...) {
     va_list args;
     va_start(args, fmt);
     if(fmt) {
@@ -88,7 +88,7 @@ void log_info(int session_id, const char*fmt, ...) {
 }
 
 
-int send_message(int sockfd, u_int8_t type, int session_id, std::string payload) {
+int send_message(int sockfd, u_int8_t type, uint16_t session_id, std::string payload) {
     if (payload.length() > BUFFER_SIZE) {
         log_error(session_id, "Payload size bigger than buffer limit of %d bytes", BUFFER_SIZE);
         return -1;
@@ -122,7 +122,7 @@ int send_message(int sockfd, u_int8_t type, int session_id, std::string payload)
 }
 
 
-int send_binary(int sockfd, u_int8_t type, int session_id, int len, const char *buf) {
+int send_binary(int sockfd, u_int8_t type, uint16_t session_id, uint16_t len, const char *buf) {
     if (len > BUFFER_SIZE) {
         log_error(session_id, "Payload size bigger than buffer limit of %d bytes", BUFFER_SIZE);
         return -1;
@@ -156,7 +156,7 @@ int send_binary(int sockfd, u_int8_t type, int session_id, int len, const char *
 }
 
 
-int read_message(int sockfd, int session_id, message *msg) {
+int read_message(int sockfd, uint16_t session_id, message *msg) {
     bzero(msg, sizeof(message));
     char *buf = (char*)malloc(sizeof(message));
     bzero(buf, BUFFER_SIZE);
@@ -181,7 +181,7 @@ int read_message(int sockfd, int session_id, message *msg) {
 }
 
 
-void broken_protocol(int sockfd, int session_id){
+void broken_protocol(int sockfd, uint16_t session_id){
     log_error(session_id, "Message received out of protocol");
     close(sockfd);
 }

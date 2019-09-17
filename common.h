@@ -3,6 +3,8 @@
 
 #define BUFFER_SIZE 1000
 
+#include <stdint.h>
+
 /* Protocol */
 enum MessageType {
     // Connection management
@@ -51,23 +53,23 @@ enum MessageType {
 };
 
 struct message {
-    u_int8_t type;
-    int session_id;
-    int len;
+    uint8_t type;
+    uint16_t session_id;
+    uint16_t len;
     char payload[BUFFER_SIZE];
 };
 typedef struct message message;
 
-int send_message(int sockfd, u_int8_t type, int session_id, std::string payload);
-int send_binary(int sockfd, u_int8_t type, int session_id, int len, const char *buf);
-int read_message(int sockfd, int session_id, message *msg);
-void broken_protocol(int sockfd, int session_id);
+int send_message(int sockfd, u_int8_t type, uint16_t session_id, std::string payload);
+int send_binary(int sockfd, u_int8_t type, uint16_t session_id, uint16_t len, const char *buf);
+int read_message(int sockfd, uint16_t session_id, message *msg);
+void broken_protocol(int sockfd, uint16_t session_id);
 
 
 /* Logging */
-void raise_error(int session_id, const char *fmt, ...);
-void log_error(int session_id, const char *fmt, ...);
-void log_warning(int session_id, const char *fmt, ...);
-void log_info(int session_id, const char *fmt, ...);
+void raise_error(uint16_t session_id, const char *fmt, ...);
+void log_error(uint16_t session_id, const char *fmt, ...);
+void log_warning(uint16_t session_id, const char *fmt, ...);
+void log_info(uint16_t session_id, const char *fmt, ...);
 
 #endif //FTPSERVER_COMMON_H
